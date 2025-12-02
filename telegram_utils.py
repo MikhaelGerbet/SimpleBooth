@@ -34,9 +34,9 @@ def send_to_telegram(photo_path, config, photo_type="photo"):
         return
     try:
         logger.info(f"[TELEGRAM] Envoi de {photo_path} vers le chat {chat_id}")
-        caption = "📸 Nouvelle photo du photobooth!"
+        caption = "📸 Nouvelle photo du WizardPhotoBox!"
         if photo_type == "effet":
-            caption = "🎨 Photo avec effet IA du photobooth!"
+            caption = "🎨 Photo avec effet IA du WizardPhotoBox!"
         async def send_photo_async():
             try:
                 await _send_telegram_photo(bot_token, chat_id, photo_path, caption)

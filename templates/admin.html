@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Photobooth - Administration{% endblock %}
+{% block title %}WizardPhotoBox - Administration{% endblock %}
 
 {% block content %}
 <!-- Toast de confirmation -->
@@ -22,21 +22,21 @@
         <!-- En-tête admin -->
         <div class="admin-header text-center">
             <h1><i class="fas fa-cog me-3"></i>Administration</h1>
-            <p class="mb-0">Configuration et gestion du photobooth</p>
+            <p class="mb-0">Configuration et gestion du WizardPhotoBox</p>
         </div>
         
         <!-- Navigation -->
         <div class="mb-4">
             <a href="{{ url_for('index') }}" class="btn btn-primary">
                 <i class="fas fa-arrow-left me-2"></i>
-                Retour au Photobooth
+                Retour au WizardPhotoBox
             </a>
         </div>
         
-        <!-- Configuration Photobooth -->
+        <!-- Configuration WizardPhotoBox -->
         <div class="card mb-4">
             <div class="card-header bg-primary text-white">
-                <h3 class="mb-0"><i class="fas fa-camera me-2"></i>Configuration Photobooth</h3>
+                <h3 class="mb-0"><i class="fas fa-camera me-2"></i>Configuration WizardPhotoBox</h3>
             </div>
             <div class="card-body">
                 <form method="POST" action="{{ url_for('save_admin_config') }}">
@@ -51,7 +51,7 @@
                                        id="footer_text" 
                                        name="footer_text" 
                                        value="{{ config.footer_text }}"
-                                       placeholder="Ex: Mon Photobooth 2024">
+                                       placeholder="Ex: Mon WizardPhotoBox 2024">
                                 <div class="form-text">Ce texte apparaîtra sous chaque photo imprimée</div>
                             </div>
                         </div>

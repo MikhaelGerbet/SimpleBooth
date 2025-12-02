@@ -8,7 +8,7 @@ CONFIG_FILE = 'config.json'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
 DEFAULT_CONFIG = {
-    'footer_text': 'Photobooth',
+    'footer_text': 'WizardPhotoBox',
     'timer_seconds': 3,
     'high_density': False,
     'slideshow_enabled': False,

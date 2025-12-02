@@ -1,6 +1,6 @@
-# 📸 Photobooth Raspberry Pi
+# 📸 WizardPhotoBox Raspberry Pi
 
-> **Application Flask pour photobooth tactile avec flux vidéo temps réel, capture instantanée, effets IA, impression photo et intégration Telegram**
+> **Application Flask pour WizardPhotoBox tactile avec flux vidéo temps réel, capture instantanée, effets IA, impression photo et intégration Telegram**
 
 ![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
 ![Flask](https://img.shields.io/badge/Flask-2.3.3-green.svg)
@@ -13,7 +13,7 @@
 
 ## 🎯 Aperçu
 
-Cette application transforme votre Raspberry Pi en un photobooth professionnel avec :
+Cette application transforme votre Raspberry Pi en un WizardPhotoBox professionnel avec :
 - **Flux vidéo temps réel** en MJPEG 1280x720 (16:9)
 - **Support multi-caméras** : Pi Camera (v1/v2/v3) ou caméra USB
 - **Compatible Raspberry Pi 4 et 5** (détection automatique rpicam-vid/libcamera-vid)
@@ -205,13 +205,13 @@ python3 app.py
 
 | Interface | URL |
 |-----------|-----|
-| **Photobooth** | `http://localhost:5000` |
+| **WizardPhotoBox** | `http://localhost:5000` |
 | **Administration** | `http://localhost:5000/admin` |
 | **CUPS** | `http://localhost:631` |
 
 ### Mode Kiosk (après installation avec setup.sh)
 
-Le photobooth démarre automatiquement en mode plein écran au démarrage du Raspberry Pi.
+Le WizardPhotoBox démarre automatiquement en mode plein écran au démarrage du Raspberry Pi.
 
 ```bash
 # Vérifier le statut du service
@@ -241,7 +241,7 @@ SimpleBooth/
 │   └── camera-placeholder.svg
 ├── templates/             # Templates HTML (Jinja2)
 │   ├── base.html          # Template de base
-│   ├── index.html         # Interface photobooth
+│   ├── index.html         # Interface WizardPhotoBox
 │   ├── review.html        # Prévisualisation photo
 │   └── admin.html         # Administration
 ├── photos/                # Photos originales (créé automatiquement)
@@ -255,7 +255,7 @@ La configuration est sauvegardée dans `config.json` :
 ### Général
 | Option | Description | Défaut |
 |--------|-------------|--------|
-| `footer_text` | Texte en pied de photo | "Photobooth" |
+| `footer_text` | Texte en pied de photo | "WizardPhotoBox" |
 | `timer_seconds` | Délai avant capture (1-10s) | 3 |
 
 ### Caméra

@@ -26,7 +26,7 @@ from camera_utils import UsbCamera, detect_cameras
 from telegram_utils import send_to_telegram
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'photobooth_secret_key_2024')
+app.secret_key = os.environ.get('SECRET_KEY', 'wizardphotobox_secret_key_2024')
 
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
