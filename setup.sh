@@ -274,11 +274,32 @@ setup_python_env() {
   if [[ -f "$APP_DIR/requirements.txt" ]]; then
     run_with_live_output "Installation depuis requirements.txt..." pip install -r "$APP_DIR/requirements.txt" || error "Échec installation requirements.txt"
   else
-    run_with_live_output "Installation des paquets Python (flask, pillow, numpy)..." pip install flask pillow numpy || error "Échec installation paquets Python"
+    run_with_live_output "Installation des paquets Python (flask, pillow, numpy, qrcode)..." pip install flask pillow numpy qrcode || error "Échec installation paquets Python"
   fi
   
   deactivate
   ok "Environnement Python configuré avec succès"
+}
+
+setup_directories() {
+  step "Création des dossiers de l'application"
+  
+  # Dossier pour les photos
+  mkdir -p "$APP_DIR/photos"
+  log "Dossier photos/ créé"
+  
+  # Dossier pour les effets IA
+  mkdir -p "$APP_DIR/effet"
+  log "Dossier effet/ créé"
+  
+  # Dossier pour les QR Codes Telegram (cache)
+  mkdir -p "$APP_DIR/static/qrcodes"
+  log "Dossier static/qrcodes/ créé (cache QR Code Telegram)"
+  
+  # Permissions pour l'utilisateur
+  chown -R "$INSTALL_USER:$INSTALL_USER" "$APP_DIR/photos" "$APP_DIR/effet" "$APP_DIR/static/qrcodes"
+  
+  ok "Dossiers de l'application créés"
 }
 
 setup_kiosk() {
@@ -391,6 +412,7 @@ main() {
   fi
   
   setup_python_env
+  setup_directories
   setup_kiosk
   setup_systemd
   

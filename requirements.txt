@@ -22,6 +22,9 @@ itsdangerous==2.1.2
 # Pillow - Traitement d'images
 Pillow==10.0.1
 
+# QR Code generation
+qrcode==7.4.2
+
 # === HARDWARE INTERFACES ===
 # Communication série pour imprimante
 pyserial==3.5

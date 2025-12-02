@@ -4,126 +4,202 @@
 
 {% block content %}
 <style>
-    /* Assurer que le conteneur principal remplit la hauteur de la fenêtre */
-    .review-container {
+    /* Layout principal : photo à gauche, actions à droite */
+    .review-layout {
         display: flex;
-        flex-direction: column;
-        /* Hauteur de la fenêtre moins le padding du container-fluid de base.html */
-        height: calc(100vh - 40px);
-        padding: 1rem; /* Ajouter un peu d'espace */
-        background: rgba(255,255,255,0.95);
-        border-radius: 20px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        height: 100vh;
+        width: 100vw;
+        background-color: #1a1a1a;
+        overflow: hidden;
     }
-
-    .photo-container {
-        flex-grow: 1; /* Prend tout l'espace vertical disponible */
+    
+    /* Zone photo (gauche) */
+    .photo-zone {
+        flex: 1;
         display: flex;
-        justify-content: center;
         align-items: center;
-        overflow: hidden; /* Empêche le dépassement */
-        margin-bottom: 1rem;
+        justify-content: center;
+        padding: 1rem;
+        overflow: hidden;
     }
-
-    .photo-preview-responsive {
+    
+    .photo-wrapper {
+        position: relative;
         max-width: 100%;
         max-height: 100%;
-        object-fit: contain; /* Garde les proportions sans couper l'image */
+    }
+    
+    .photo-preview {
+        max-width: 100%;
+        max-height: calc(100vh - 2rem);
+        object-fit: contain;
         border-radius: 15px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
     }
-
-    .action-buttons {
-        flex-shrink: 0; /* Empêche les boutons de rétrécir */
-    }
-    .btn-review {
-        height: 70px;
-        font-size: 1.1em;
+    
+    /* Zone actions (droite) */
+    .actions-zone {
+        width: 300px;
+        min-width: 300px;
+        background: linear-gradient(180deg, #2d2d2d 0%, #1a1a1a 100%);
+        padding: 1.5rem;
         display: flex;
         flex-direction: column;
+        gap: 1rem;
+        border-left: 1px solid #444;
+    }
+    
+    /* Section QR Code */
+    .qrcode-section {
+        background: white;
+        border-radius: 15px;
+        padding: 1rem;
+        text-align: center;
+    }
+    
+    .qrcode-section img {
+        max-width: 150px;
+        height: auto;
+    }
+    
+    .qrcode-section h6 {
+        color: #333;
+        margin-bottom: 0.5rem;
+        font-size: 0.9rem;
+    }
+    
+    .qrcode-section p {
+        color: #666;
+        font-size: 0.75rem;
+        margin: 0;
+    }
+    
+    /* Boutons d'action */
+    .action-btn {
+        width: 100%;
+        padding: 1rem;
+        font-size: 1.1rem;
+        border-radius: 12px;
+        border: none;
+        display: flex;
         align-items: center;
         justify-content: center;
-        line-height: 1.2;
-        padding: 0.5rem;
+        gap: 0.5rem;
+        transition: all 0.2s ease;
+        text-decoration: none;
     }
-    .btn-review i {
-        font-size: 1.5rem;
-        margin-bottom: 0.25rem;
+    
+    .action-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    }
+    
+    .action-btn i {
+        font-size: 1.3rem;
+    }
+    
+    .btn-effect {
+        background: linear-gradient(180deg, #ffc107 0%, #e0a800 100%);
+        color: #000;
+    }
+    
+    .btn-print {
+        background: linear-gradient(180deg, #28a745 0%, #1e7e34 100%);
+        color: white;
+    }
+    
+    .btn-retake {
+        background: linear-gradient(180deg, #007bff 0%, #0056b3 100%);
+        color: white;
+    }
+    
+    .btn-delete {
+        background: linear-gradient(180deg, #dc3545 0%, #a71d2a 100%);
+        color: white;
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+        .review-layout {
+            flex-direction: column;
+        }
+        
+        .actions-zone {
+            width: 100%;
+            min-width: unset;
+            flex-direction: row;
+            flex-wrap: wrap;
+            border-left: none;
+            border-top: 1px solid #444;
+            padding: 1rem;
+        }
+        
+        .qrcode-section {
+            flex: 1;
+            min-width: 150px;
+        }
+        
+        .action-btn {
+            flex: 1;
+            min-width: 100px;
+            padding: 0.75rem;
+            font-size: 0.9rem;
+        }
     }
 </style>
 
-<div class="review-container">
-    <!-- Conteneur pour l'aperçu de la photo -->
-    <div class="photo-container">
-        <img src="{{ url_for('serve_photo', filename=photo) }}" 
-             alt="Photo capturée" 
-             class="photo-preview-responsive">
+<div class="review-layout">
+    <!-- Zone photo (gauche) -->
+    <div class="photo-zone">
+        <div class="photo-wrapper">
+            <img src="{{ url_for('serve_photo', filename=photo) }}" 
+                 alt="Photo capturée" 
+                 class="photo-preview"
+                 id="photoPreview">
+        </div>
     </div>
     
-    <!-- Conteneur pour les boutons d'action -->
-    <div class="action-buttons">
-        <div class="row g-2 g-md-3 justify-content-center">
+    <!-- Zone actions (droite) -->
+    <div class="actions-zone">
+        <!-- QR Code Telegram -->
+        {% if config.telegram_enabled %}
+        <div class="qrcode-section" id="qrcodeSection">
+            <h6><i class="fab fa-telegram me-1"></i> Rejoignez-nous !</h6>
+            <div id="qrcodeContainer">
+                <div class="text-muted">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <small>Chargement...</small>
+                </div>
+            </div>
+            <p class="mt-2">Scannez pour voir toutes les photos</p>
+        </div>
+        {% endif %}
+        
+        <!-- Boutons d'action -->
+        <div class="d-flex flex-column gap-2 mt-auto">
             {% if config.effect_enabled %}
-            <div class="col">
-                <button class="btn btn-warning w-100 btn-review" onclick="applyEffect()">
-                    <i class="fas fa-magic"></i>
-                    <span>Effet</span>
-                </button>
-            </div>
+            <button class="action-btn btn-effect" onclick="applyEffect()">
+                <i class="fas fa-magic"></i>
+                Effet IA
+            </button>
+            {% endif %}
+            
             {% if config.printer_enabled %}
-            <div class="col">
-                <button class="btn btn-success w-100 btn-review" onclick="printPhoto()">
-                    <i class="fas fa-print"></i>
-                    <span>Imprimer</span>
-                </button>
-            </div>
+            <button class="action-btn btn-print" onclick="printPhoto()">
+                <i class="fas fa-print"></i>
+                Imprimer
+            </button>
             {% endif %}
-            <div class="col">
-                <a href="{{ url_for('index') }}" class="btn btn-primary w-100 btn-review">
-                    <i class="fas fa-redo"></i>
-                    <span>Reprendre</span>
-                </a>
-            </div>
-            <div class="col">
-                <button class="btn btn-danger w-100 btn-review" onclick="deletePhoto()">
-                    <i class="fas fa-trash"></i>
-                    <span>Supprimer</span>
-                </button>
-            </div>
-            {% else %}
-            {% if config.printer_enabled %}
-                <div class="col-4">
-                    <button class="btn btn-success w-100 btn-review" onclick="printPhoto()">
-                        <i class="fas fa-print"></i>
-                        <span>Imprimer</span>
-                    </button>
-                </div>
-                <div class="col-4">
-                    <a href="{{ url_for('index') }}" class="btn btn-primary w-100 btn-review">
-                        <i class="fas fa-redo"></i>
-                        <span>Reprendre</span>
-                    </a>
-                </div>
-                <div class="col-4">
-                    <button class="btn btn-danger w-100 btn-review" onclick="deletePhoto()">
-                        <i class="fas fa-trash"></i>
-                        <span>Supprimer</span>
-                    </button>
-                </div>
-            {% else %}
-                <div class="col-6">
-                    <a href="{{ url_for('index') }}" class="btn btn-primary w-100 btn-review">
-                        <i class="fas fa-redo"></i>
-                        <span>Reprendre</span>
-                    </a>
-                </div>
-                <div class="col-6">
-                    <button class="btn btn-danger w-100 btn-review" onclick="deletePhoto()">
-                        <i class="fas fa-trash"></i>
-                        <span>Supprimer</span>
-                    </button>
-                </div>
-            {% endif %}
-            {% endif %}
+            
+            <a href="{{ url_for('index') }}" class="action-btn btn-retake">
+                <i class="fas fa-redo"></i>
+                Reprendre
+            </a>
+            
+            <button class="action-btn btn-delete" onclick="deletePhoto()">
+                <i class="fas fa-trash"></i>
+                Supprimer
+            </button>
         </div>
     </div>
 </div>
@@ -191,6 +267,30 @@
 
 {% block scripts %}
 <script>
+// Charger le QR Code Telegram au chargement de la page
+document.addEventListener('DOMContentLoaded', function() {
+    loadTelegramQRCode();
+});
+
+async function loadTelegramQRCode() {
+    const qrcodeContainer = document.getElementById('qrcodeContainer');
+    if (!qrcodeContainer) return; // Telegram non activé
+    
+    try {
+        const response = await fetch('/api/telegram/qrcode');
+        const data = await response.json();
+        
+        if (data.success) {
+            qrcodeContainer.innerHTML = `<img src="${data.url}" alt="QR Code Telegram" style="max-width: 150px;">`;
+        } else {
+            qrcodeContainer.innerHTML = `<small class="text-muted">${data.error || 'QR Code non disponible'}</small>`;
+        }
+    } catch (error) {
+        console.error('Erreur chargement QR Code:', error);
+        qrcodeContainer.innerHTML = '<small class="text-muted">Erreur de chargement</small>';
+    }
+}
+
 async function printPhoto() {
     const printBtn = event.target;
     const originalContent = printBtn.innerHTML;

@@ -6,7 +6,7 @@
 ![Flask](https://img.shields.io/badge/Flask-2.3.3-green.svg)
 ![Raspberry Pi](https://img.shields.io/badge/Raspberry%20Pi%204%2F5-Compatible-red.svg)
 ![Runware](https://img.shields.io/badge/Runware%20AI-Intégré-purple.svg)
-![Telegram](https://img.shields.io/badge/Telegram-Bot-blue.svg)
+![Telegram](https://img.shields.io/badge/Telegram-Bot%20%2B%20QRCode-blue.svg)
 ![OpenCV](https://img.shields.io/badge/OpenCV-Support%20USB-brightgreen.svg)
 ![CUPS](https://img.shields.io/badge/CUPS-Canon%20SELPHY-orange.svg)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
@@ -18,11 +18,15 @@ Cette application transforme votre Raspberry Pi en un WizardPhotoBox professionn
 - **Support multi-caméras** : Pi Camera (v1/v2/v3) ou caméra USB
 - **Compatible Raspberry Pi 4 et 5** (détection automatique rpicam-vid/libcamera-vid)
 - **Interface tactile optimisée** pour écran 7 pouces
-- **Capture photo instantanée** directement depuis le flux vidéo
+- **Nouveau layout ergonomique** : preview à gauche, options à droite
+- **Retardateur personnalisable** : 3, 5 ou 10 secondes au choix
+- **Mode photo** : Couleur ou Noir & Blanc (sélectionnable par l'utilisateur)
+- **Capture photo instantanée** au format 15x10cm (paysage, 2400x1600px @ 300dpi)
 - **Effets IA** via **Runware** pour transformer vos photos en style artistique
+- **QR Code Telegram** généré automatiquement pour inviter les participants
 - **Diaporama automatique** configurable après période d'inactivité
 - **Bot Telegram** pour envoi automatique des photos sur un groupe/canal
-- **Impression photo couleur** via Canon SELPHY CP1500 (CUPS)
+- **Impression photo couleur** via Canon SELPHY CP1500 (CUPS) format 15x10cm
 - **Impression thermique** pour tickets/reçus (ESC/POS)
 - **Interface d'administration** complète
 
@@ -238,11 +242,12 @@ SimpleBooth/
 ├── requirements.txt       # Dépendances Python
 ├── config.json            # Configuration (créé au lancement)
 ├── static/                # Fichiers statiques
-│   └── camera-placeholder.svg
+│   ├── camera-placeholder.svg
+│   └── qrcodes/           # Cache des QR Codes Telegram (auto-généré)
 ├── templates/             # Templates HTML (Jinja2)
 │   ├── base.html          # Template de base
-│   ├── index.html         # Interface WizardPhotoBox
-│   ├── review.html        # Prévisualisation photo
+│   ├── index.html         # Interface WizardPhotoBox (preview + options)
+│   ├── review.html        # Prévisualisation photo + QR Code Telegram
 │   └── admin.html         # Administration
 ├── photos/                # Photos originales (créé automatiquement)
 └── effet/                 # Photos avec effets IA (créé automatiquement)
@@ -256,7 +261,7 @@ La configuration est sauvegardée dans `config.json` :
 | Option | Description | Défaut |
 |--------|-------------|--------|
 | `footer_text` | Texte en pied de photo | "WizardPhotoBox" |
-| `timer_seconds` | Délai avant capture (1-10s) | 3 |
+| `timer_seconds` | Délai avant capture (3/5/10s sélectionnable) | 5 |
 
 ### Caméra
 | Option | Description | Défaut |
@@ -264,13 +269,19 @@ La configuration est sauvegardée dans `config.json` :
 | `camera_type` | `picamera` ou `usb` | "picamera" |
 | `usb_camera_id` | ID de la caméra USB | 0 |
 
+### Photo
+| Option | Description | Défaut |
+|--------|-------------|--------|
+| Format photo | 15x10cm paysage (ratio 3:2) | 2400x1600px |
+| Style | Couleur ou N&B (choix utilisateur) | Couleur |
+
 ### Imprimante
 | Option | Description | Défaut |
 |--------|-------------|--------|
 | `printer_enabled` | Activer l'impression | true |
 | `printer_type` | `cups` ou `thermal` | "cups" |
 | `printer_name` | Nom imprimante CUPS | "" (défaut système) |
-| `paper_size` | Format papier | "4x6" |
+| `paper_size` | Format papier | "4x6" (15x10cm) |
 
 ### Diaporama
 | Option | Description | Défaut |
@@ -294,6 +305,7 @@ La configuration est sauvegardée dans `config.json` :
 | `telegram_bot_token` | Token du bot | "" |
 | `telegram_chat_id` | ID du chat/groupe | "" |
 | `telegram_send_type` | Photos à envoyer | "photos" |
+| QR Code | Généré automatiquement (caché par chat_id) | Auto |
 
 ## 🤖 Configuration des Effets IA (Runware)
 
@@ -334,6 +346,19 @@ Transform into a cartoon style illustration
    - Groupe : [@GroupIDbot](https://t.me/GroupIDbot) (format: `-123456789`)
    - Canal : `@nom_du_canal` ou `-100123456789`
 3. **Configurer dans l'admin** SimpleBooth
+
+### QR Code d'invitation
+
+SimpleBooth génère automatiquement un **QR Code d'invitation** vers votre groupe/canal Telegram :
+- Affiché sur la page de revue après chaque photo
+- Le QR Code est **mis en cache** par `chat_id` (un seul appel API par groupe)
+- Les participants peuvent scanner pour rejoindre le groupe instantanément
+- Nécessite que le bot soit **administrateur** du groupe/canal
+
+**Fonctionnement :**
+1. À la première demande, l'API Telegram génère un lien d'invitation
+2. Un QR Code est créé et sauvegardé dans `static/qrcodes/`
+3. Les demandes suivantes utilisent le fichier en cache
 
 ## 🔧 Dépannage
 

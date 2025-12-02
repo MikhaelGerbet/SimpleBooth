@@ -3,36 +3,51 @@
 {% block title %}WizardPhotoBox{% endblock %}
 
 {% block content %}
-<div class="container-fluid p-3" style="height: 100vh; overflow: hidden; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: #1a1a1a;">
+<div class="container-fluid p-0" style="height: 100vh; overflow: hidden; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: #1a1a1a;">
     <style>
-    /* Ajustements spécifiques pour les petits écrans 800x480 */
-    @media (max-width: 800px) and (max-height: 480px) {
-        #videoContainer {
-            height: calc(100vh - 1rem);
-            width: calc(100vw - 1rem);
-        }
-
-        #videoPreview {
-            max-width: calc(100vw - 1rem);
-            max-height: calc(100vh - 1rem);
-        }
-
-        #captureBtn {
-            font-size: 1.2rem;
-            padding: 8px 16px;
-        }
+    /* Layout principal : preview à gauche, options à droite */
+    .main-layout {
+        display: flex;
+        height: 100vh;
+        width: 100vw;
     }
     
-    /* Conteneur pour superposer l'overlay sur la vidéo */
+    /* Zone preview (gauche) - prend l'espace restant */
+    .preview-zone {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        overflow: hidden;
+    }
+    
+    /* Wrapper avec ratio 3:2 (15x10 paysage) */
     .video-wrapper {
         position: relative;
-        display: inline-block;
+        width: 100%;
+        max-height: 100%;
+        aspect-ratio: 3 / 2;
+        overflow: hidden;
+        border-radius: 15px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
     }
     
-    .video-wrapper img {
-        display: block;
+    /* Vidéo qui remplit le conteneur */
+    #videoPreview {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        min-width: 100%;
+        min-height: 100%;
+        width: auto;
+        height: 100%;
+        object-fit: cover;
+        background-color: #000;
     }
     
+    /* Overlay parfaitement superposé */
     .overlay-preview {
         position: absolute;
         top: 0;
@@ -41,42 +56,202 @@
         height: 100%;
         pointer-events: none;
         z-index: 2;
-        object-fit: contain;
+        object-fit: cover;
+    }
+    
+    /* Zone options (droite) */
+    .options-zone {
+        width: 280px;
+        min-width: 280px;
+        background: linear-gradient(180deg, #2d2d2d 0%, #1a1a1a 100%);
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        border-left: 1px solid #444;
+    }
+    
+    /* Bouton capture principal */
+    .capture-btn {
+        width: 100%;
+        padding: 1.5rem;
+        font-size: 1.5rem;
         border-radius: 15px;
+        background: linear-gradient(180deg, #dc3545 0%, #a71d2a 100%);
+        border: none;
+        color: white;
+        box-shadow: 0 4px 15px rgba(220, 53, 69, 0.4);
+        transition: all 0.2s ease;
+    }
+    
+    .capture-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(220, 53, 69, 0.5);
+    }
+    
+    .capture-btn:active {
+        transform: translateY(0);
+    }
+    
+    /* Section d'options */
+    .option-section {
+        background: rgba(255,255,255,0.05);
+        border-radius: 12px;
+        padding: 1rem;
+    }
+    
+    .option-title {
+        color: #aaa;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    /* Boutons toggle pour les options */
+    .option-buttons {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+    
+    .option-btn {
+        flex: 1;
+        min-width: 70px;
+        padding: 0.75rem 0.5rem;
+        border: 2px solid #444;
+        background: transparent;
+        color: #ccc;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        transition: all 0.2s ease;
+        cursor: pointer;
+    }
+    
+    .option-btn:hover {
+        border-color: #666;
+        color: #fff;
+    }
+    
+    .option-btn.active {
+        border-color: #0d6efd;
+        background: rgba(13, 110, 253, 0.2);
+        color: #fff;
+    }
+    
+    /* Ajustements pour petits écrans */
+    @media (max-width: 900px) {
+        .options-zone {
+            width: 200px;
+            min-width: 200px;
+            padding: 1rem;
+        }
+        
+        .capture-btn {
+            padding: 1rem;
+            font-size: 1.2rem;
+        }
+        
+        .option-btn {
+            padding: 0.5rem;
+            font-size: 0.8rem;
+        }
+    }
+    
+    @media (max-width: 600px) {
+        .main-layout {
+            flex-direction: column;
+        }
+        
+        .options-zone {
+            width: 100%;
+            min-width: unset;
+            flex-direction: row;
+            flex-wrap: wrap;
+            border-left: none;
+            border-top: 1px solid #444;
+            padding: 0.75rem;
+            gap: 0.75rem;
+        }
+        
+        .option-section {
+            flex: 1;
+            min-width: 120px;
+        }
     }
     </style>
-    <!-- Conteneur vidéo avec marges élégantes -->
-    <div class="video-container position-relative d-flex align-items-center justify-content-center" id="videoContainer" style="height: calc(100vh - 2rem); width: calc(100vw - 2rem);">
-        <!-- Wrapper pour superposer l'overlay sur la vidéo -->
-        <div class="video-wrapper">
-            <img id="videoPreview" 
-                 src="{{ url_for('video_stream') }}" 
-                 style="max-width: calc(100vw - 2rem); max-height: calc(100vh - 2rem); width: auto; height: auto; object-fit: contain; background-color: #000; border-radius: 15px; box-shadow: 0 8px 32px rgba(0,0,0,0.5);"
-                 alt="Flux vidéo caméra">
-            
-            <!-- Overlay transparent superposé -->
-            <img id="overlayPreview" 
-                 class="overlay-preview d-none" 
-                 alt="Overlay"
-                 style="box-shadow: none;">
+    
+    <!-- Layout principal -->
+    <div class="main-layout">
+        <!-- Zone preview (gauche) -->
+        <div class="preview-zone">
+            <div class="video-wrapper">
+                <img id="videoPreview" 
+                     src="{{ url_for('video_stream') }}" 
+                     alt="Flux vidéo caméra">
+                
+                <!-- Overlay transparent superposé -->
+                <img id="overlayPreview" 
+                     class="overlay-preview d-none" 
+                     alt="Overlay">
+                
+                <!-- Countdown overlay -->
+                <div class="countdown d-none position-absolute top-50 start-50 translate-middle" 
+                     id="countdown" style="z-index: 10;"></div>
+            </div>
         </div>
         
-        <!-- Countdown overlay -->
-        <div class="countdown d-none position-absolute top-50 start-50 translate-middle" id="countdown"></div>
-        
-        <!-- Flash blanc pour la prise de photo -->
-        <div class="flash-overlay d-none position-fixed top-0 start-0 w-100 h-100" id="flashOverlay" 
-             style="background-color: white; z-index: 15; display: flex; align-items: center; justify-content: center;">
-            <div style="font-size: 8rem; font-weight: bold; color: black; text-shadow: none;">CHEESE!</div>
-        </div>
-        
-        <!-- Bouton capture en overlay -->
-        <div class="position-absolute bottom-0 start-50 translate-middle-x mb-4" style="z-index: 5;">
-            <button id="captureBtn" class="btn btn-danger btn-lg px-5 py-3" onclick="capturePhoto()" 
-                    style="font-size: 1.5rem; border-radius: 50px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
-                <i class="fas fa-camera fa-2x"></i>
+        <!-- Zone options (droite) -->
+        <div class="options-zone">
+            <!-- Bouton capture principal -->
+            <button id="captureBtn" class="capture-btn" onclick="capturePhoto()">
+                <i class="fas fa-camera me-2"></i>
+                PHOTO
             </button>
+            
+            <!-- Retardateur -->
+            <div class="option-section">
+                <div class="option-title">
+                    <i class="fas fa-clock"></i>
+                    Retardateur
+                </div>
+                <div class="option-buttons">
+                    <button class="option-btn timer-btn" data-timer="3" onclick="setTimer(3)">3s</button>
+                    <button class="option-btn timer-btn active" data-timer="5" onclick="setTimer(5)">5s</button>
+                    <button class="option-btn timer-btn" data-timer="10" onclick="setTimer(10)">10s</button>
+                </div>
+            </div>
+            
+            <!-- Style photo -->
+            <div class="option-section">
+                <div class="option-title">
+                    <i class="fas fa-palette"></i>
+                    Style
+                </div>
+                <div class="option-buttons">
+                    <button class="option-btn style-btn active" data-style="color" onclick="setStyle('color')">
+                        <i class="fas fa-rainbow me-1"></i>Couleur
+                    </button>
+                    <button class="option-btn style-btn" data-style="bw" onclick="setStyle('bw')">
+                        <i class="fas fa-adjust me-1"></i>N&B
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Indicateur d'état -->
+            <div class="mt-auto text-center">
+                <small class="text-muted" id="statusText">Prêt</small>
+            </div>
         </div>
+    </div>
+    
+    <!-- Flash blanc pour la prise de photo -->
+    <div class="flash-overlay d-none position-fixed top-0 start-0 w-100 h-100" id="flashOverlay" 
+         style="background-color: white; z-index: 100; display: flex; align-items: center; justify-content: center;">
+        <div style="font-size: 6rem; font-weight: bold; color: black; text-shadow: none;">CHEESE!</div>
     </div>
     
     <!-- Alerte manque de papier -->
@@ -119,15 +294,65 @@
 <script>
 let isCapturing = false;
 let currentOverlayUrl = '';
+let selectedTimer = {{ config.timer_seconds | default(5) }};
+let selectedStyle = 'color';
 
 // Initialiser la caméra et l'overlay au chargement de la page
 document.addEventListener('DOMContentLoaded', function() {
     initCamera();
     loadOverlayPreview();
+    initOptions();
     
     // Vérifier périodiquement si l'overlay a changé (toutes les 5 secondes)
     setInterval(loadOverlayPreview, 5000);
 });
+
+// Initialiser les options (sélection par défaut)
+function initOptions() {
+    // Sélectionner le timer par défaut
+    setTimer(selectedTimer);
+    // Sélectionner le style par défaut
+    setStyle(selectedStyle);
+}
+
+// Définir le retardateur
+function setTimer(seconds) {
+    selectedTimer = seconds;
+    document.querySelectorAll('.timer-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (parseInt(btn.dataset.timer) === seconds) {
+            btn.classList.add('active');
+        }
+    });
+    updateStatus();
+}
+
+// Définir le style photo
+function setStyle(style) {
+    selectedStyle = style;
+    document.querySelectorAll('.style-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.style === style) {
+            btn.classList.add('active');
+        }
+    });
+    
+    // Appliquer un filtre CSS sur le preview pour visualiser le style
+    const videoPreview = document.getElementById('videoPreview');
+    if (style === 'bw') {
+        videoPreview.style.filter = 'grayscale(100%)';
+    } else {
+        videoPreview.style.filter = 'none';
+    }
+    updateStatus();
+}
+
+// Mettre à jour le texte de statut
+function updateStatus() {
+    const statusText = document.getElementById('statusText');
+    const styleText = selectedStyle === 'bw' ? 'N&B' : 'Couleur';
+    statusText.textContent = `${selectedTimer}s · ${styleText}`;
+}
 
 // Charger l'overlay actuel pour l'afficher sur le flux vidéo
 function loadOverlayPreview() {
@@ -207,10 +432,10 @@ function capturePhoto() {
     
     // Désactiver le bouton
     captureBtn.disabled = true;
-    captureBtn.innerHTML = '<i class="fas fa-spinner fa-spin fa-2x"></i>';
+    captureBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Préparation...';
     
-    // Démarrer le compte à rebours
-    let timeLeft = parseInt('{{ timer }}');
+    // Utiliser le timer sélectionné par l'utilisateur
+    let timeLeft = selectedTimer;
     countdown.classList.remove('d-none');
     
     const countdownInterval = setInterval(() => {
@@ -239,11 +464,15 @@ function capturePhoto() {
 
 async function takePicture() {
     try {
+        // Envoyer la requête avec le style sélectionné
         const response = await fetch('/capture', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-            }
+            },
+            body: JSON.stringify({
+                style: selectedStyle
+            })
         });
         
         const result = await response.json();
@@ -267,7 +496,7 @@ function resetCaptureButton() {
     isCapturing = false;
     const captureBtn = document.getElementById('captureBtn');
     captureBtn.disabled = false;
-    captureBtn.innerHTML = '<i class="fas fa-camera fa-2x"></i>';
+    captureBtn.innerHTML = '<i class="fas fa-camera me-2"></i>PHOTO';
 }
 
 // Variables pour le diaporama

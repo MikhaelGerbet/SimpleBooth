@@ -177,10 +177,14 @@ frame_lock = threading.Lock()
 
 @app.route('/capture', methods=['POST'])
 def capture_photo():
-    """Capturer une photo haute résolution pour impression 10x15cm (300dpi)"""
+    """Capturer une photo haute résolution pour impression 15x10cm (300dpi)"""
     global current_photo, original_photo, last_frame
     
     try:
+        # Récupérer le style de la requête
+        data = request.get_json() or {}
+        photo_style = data.get('style', 'color')
+        
         # Générer un nom de fichier unique
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f'photo_{timestamp}.jpg'
@@ -249,6 +253,16 @@ def capture_photo():
                         return jsonify({'success': False, 'error': f'Erreur capture: {error_msg}'})
             else:
                 logger.info(f"[CAPTURE] Photo haute résolution capturée: {filename} (2400x1600)")
+        
+        # Appliquer le style N&B si sélectionné
+        if photo_style == 'bw':
+            try:
+                img = Image.open(filepath)
+                img_bw = img.convert('L').convert('RGB')  # Convertir en niveaux de gris puis RGB
+                img_bw.save(filepath, 'JPEG', quality=95)
+                logger.info(f"[CAPTURE] Style N&B appliqué à {filename}")
+            except Exception as e:
+                logger.error(f"[CAPTURE] Erreur application N&B: {e}")
         
         current_photo = filename
         original_photo = filename
@@ -801,6 +815,105 @@ def apply_overlay_to_current_photo():
             
     except Exception as e:
         logger.error(f"[OVERLAY] Erreur: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+# ============================================
+# QR CODE TELEGRAM
+# ============================================
+
+QRCODES_FOLDER = 'static/qrcodes'
+
+@app.route('/api/telegram/qrcode')
+def get_telegram_qrcode():
+    """
+    Récupérer le QR Code du groupe Telegram.
+    Utilise un cache basé sur le chat_id pour éviter les appels API répétés.
+    """
+    if not config.get('telegram_enabled', False):
+        return jsonify({'success': False, 'error': 'Telegram non configuré'})
+    
+    chat_id = config.get('telegram_chat_id', '')
+    bot_token = config.get('telegram_bot_token', '')
+    
+    if not chat_id or not bot_token:
+        return jsonify({'success': False, 'error': 'Configuration Telegram incomplète'})
+    
+    # Nettoyer le chat_id pour le nom de fichier
+    safe_chat_id = chat_id.replace('@', '').replace('-', '_').replace('/', '_')
+    qrcode_filename = f'qrcode_{safe_chat_id}.png'
+    qrcode_path = os.path.join(QRCODES_FOLDER, qrcode_filename)
+    
+    # Vérifier si le QR Code existe déjà en cache
+    if os.path.exists(qrcode_path):
+        logger.info(f"[QRCODE] Utilisation du cache: {qrcode_filename}")
+        return jsonify({
+            'success': True,
+            'url': f'/static/qrcodes/{qrcode_filename}'
+        })
+    
+    # Le QR Code n'existe pas, on doit le générer
+    try:
+        # S'assurer que le dossier existe
+        os.makedirs(QRCODES_FOLDER, exist_ok=True)
+        
+        invite_link = None
+        
+        # Si le chat_id commence par @, c'est un username public
+        if chat_id.startswith('@'):
+            invite_link = f'https://t.me/{chat_id[1:]}'
+            logger.info(f"[QRCODE] Canal public détecté: {invite_link}")
+        else:
+            # Sinon, on essaie de récupérer le lien d'invitation via l'API
+            try:
+                api_url = f'https://api.telegram.org/bot{bot_token}/exportChatInviteLink'
+                response = requests.post(api_url, json={'chat_id': chat_id}, timeout=10)
+                data = response.json()
+                
+                if data.get('ok'):
+                    invite_link = data.get('result')
+                    logger.info(f"[QRCODE] Lien d'invitation récupéré: {invite_link}")
+                else:
+                    logger.warning(f"[QRCODE] Erreur API Telegram: {data.get('description')}")
+                    # Essayer avec createChatInviteLink (pour les groupes/canaux où exportChatInviteLink ne fonctionne pas)
+                    api_url = f'https://api.telegram.org/bot{bot_token}/createChatInviteLink'
+                    response = requests.post(api_url, json={'chat_id': chat_id}, timeout=10)
+                    data = response.json()
+                    if data.get('ok'):
+                        invite_link = data.get('result', {}).get('invite_link')
+                        logger.info(f"[QRCODE] Lien créé via createChatInviteLink: {invite_link}")
+            except Exception as e:
+                logger.error(f"[QRCODE] Erreur appel API Telegram: {e}")
+        
+        if not invite_link:
+            return jsonify({'success': False, 'error': 'Impossible de récupérer le lien Telegram'})
+        
+        # Générer le QR Code
+        import qrcode
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=2,
+        )
+        qr.add_data(invite_link)
+        qr.make(fit=True)
+        
+        qr_image = qr.make_image(fill_color="black", back_color="white")
+        qr_image.save(qrcode_path)
+        
+        logger.info(f"[QRCODE] QR Code généré et sauvegardé: {qrcode_filename}")
+        
+        return jsonify({
+            'success': True,
+            'url': f'/static/qrcodes/{qrcode_filename}'
+        })
+        
+    except ImportError:
+        logger.error("[QRCODE] Module qrcode non installé. Installez-le avec: pip install qrcode[pil]")
+        return jsonify({'success': False, 'error': 'Module qrcode non installé'})
+    except Exception as e:
+        logger.error(f"[QRCODE] Erreur: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
 
