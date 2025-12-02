@@ -56,7 +56,7 @@
         height: 100%;
         pointer-events: none;
         z-index: 2;
-        object-fit: cover;
+        object-fit: fill; /* Force le remplissage exact 15:10 */
     }
     
     /* Zone contrôles à droite: espace restant = 100vw - (100vh × 1.5) */
@@ -140,16 +140,16 @@
     
     .option-popup {
         position: absolute;
-        right: 70px;
+        right: 80px;
         top: 50%;
         transform: translateY(-50%) scale(0.9);
         background: rgba(20,20,20,0.95);
         backdrop-filter: blur(20px);
-        border-radius: 12px;
-        padding: 0.5rem;
+        border-radius: 16px;
+        padding: 0.75rem;
         display: none;
         flex-direction: column;
-        gap: 0.4rem;
+        gap: 0.5rem;
         box-shadow: 0 8px 32px rgba(0,0,0,0.6);
         border: 1px solid rgba(255,255,255,0.1);
         opacity: 0;
@@ -164,20 +164,22 @@
     }
     
     .popup-btn {
-        padding: 0.5rem 1rem;
-        border-radius: 8px;
+        padding: 1rem 1.5rem;
+        border-radius: 12px;
         background: rgba(255,255,255,0.08);
         border: 2px solid transparent;
         color: white;
-        font-size: 0.85rem;
+        font-size: 1.2rem;
+        font-weight: 500;
         cursor: pointer;
         transition: all 0.15s ease;
         white-space: nowrap;
         text-align: center;
+        min-width: 100px;
     }
     
     .popup-btn:hover {
-        background: rgba(255,255,255,0.15);
+        background: rgba(255,255,255,0.2);
     }
     
     .popup-btn.active {
@@ -562,9 +564,9 @@ function capturePhoto() {
     const captureBtn = document.getElementById('captureBtn');
     const countdown = document.getElementById('countdown');
     
-    // Désactiver le bouton
+    // Désactiver le bouton et le masquer pendant le countdown
     captureBtn.disabled = true;
-    captureBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Préparation...';
+    captureBtn.style.opacity = '0.5';
     
     // Utiliser le timer sélectionné par l'utilisateur
     let timeLeft = selectedTimer;
@@ -628,7 +630,8 @@ function resetCaptureButton() {
     isCapturing = false;
     const captureBtn = document.getElementById('captureBtn');
     captureBtn.disabled = false;
-    captureBtn.innerHTML = '<i class="fas fa-camera me-2"></i>PHOTO';
+    captureBtn.style.opacity = '1';
+    captureBtn.innerHTML = '<i class="fas fa-camera"></i>';
 }
 
 // Variables pour le diaporama / écran de veille

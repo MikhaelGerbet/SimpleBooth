@@ -1,265 +1,64 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 
-{% block title %}WizardPhotoBox - Révision{% endblock %}
+{% block title %}WizardPhotoBox - Revision{% endblock %}
 
 {% block content %}
-<style>
-    /* Layout principal : photo à gauche, actions à droite */
-    .review-layout {
-        display: flex;
-        height: 100vh;
-        width: 100vw;
-        background-color: #1a1a1a;
-        overflow: hidden;
+<div class="container-fluid p-0" style="height: 100vh; overflow: hidden; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: #000;">
+    <style>
+    * {
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+        -webkit-tap-highlight-color: transparent;
     }
-    
-    /* Zone photo (gauche) */
-    .photo-zone {
-        flex: 1;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 1rem;
-        overflow: hidden;
-    }
-    
-    .photo-wrapper {
-        position: relative;
-        max-width: 100%;
-        max-height: 100%;
-    }
-    
-    .photo-preview {
-        max-width: 100%;
-        max-height: calc(100vh - 2rem);
-        object-fit: contain;
-        border-radius: 15px;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-    }
-    
-    /* Zone actions (droite) */
-    .actions-zone {
-        width: 300px;
-        min-width: 300px;
-        background: linear-gradient(180deg, #2d2d2d 0%, #1a1a1a 100%);
-        padding: 1.5rem;
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-        border-left: 1px solid #444;
-    }
-    
-    /* Section QR Code */
-    .qrcode-section {
-        background: white;
-        border-radius: 15px;
-        padding: 1rem;
-        text-align: center;
-    }
-    
-    .qrcode-section img {
-        max-width: 150px;
-        height: auto;
-    }
-    
-    .qrcode-section h6 {
-        color: #333;
-        margin-bottom: 0.5rem;
-        font-size: 0.9rem;
-    }
-    
-    .qrcode-section p {
-        color: #666;
-        font-size: 0.75rem;
-        margin: 0;
-    }
-    
-    /* Boutons d'action */
-    .action-btn {
-        width: 100%;
-        padding: 1rem;
-        font-size: 1.1rem;
-        border-radius: 12px;
-        border: none;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.5rem;
-        transition: all 0.2s ease;
-        text-decoration: none;
-    }
-    
-    .action-btn:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-    }
-    
-    .action-btn i {
-        font-size: 1.3rem;
-    }
-    
-    .btn-effect {
-        background: linear-gradient(180deg, #ffc107 0%, #e0a800 100%);
-        color: #000;
-    }
-    
-    .btn-print {
-        background: linear-gradient(180deg, #28a745 0%, #1e7e34 100%);
-        color: white;
-    }
-    
-    .btn-retake {
-        background: linear-gradient(180deg, #007bff 0%, #0056b3 100%);
-        color: white;
-    }
-    
-    .btn-delete {
-        background: linear-gradient(180deg, #dc3545 0%, #a71d2a 100%);
-        color: white;
-    }
-    
-    /* Responsive */
-    @media (max-width: 768px) {
-        .review-layout {
-            flex-direction: column;
-        }
-        
-        .actions-zone {
-            width: 100%;
-            min-width: unset;
-            flex-direction: row;
-            flex-wrap: wrap;
-            border-left: none;
-            border-top: 1px solid #444;
-            padding: 1rem;
-        }
-        
-        .qrcode-section {
-            flex: 1;
-            min-width: 150px;
-        }
-        
-        .action-btn {
-            flex: 1;
-            min-width: 100px;
-            padding: 0.75rem;
-            font-size: 0.9rem;
-        }
-    }
-</style>
-
-<div class="review-layout">
-    <!-- Zone photo (gauche) -->
-    <div class="photo-zone">
+    img { -webkit-user-drag: none; pointer-events: none; }
+    button, .btn, a { pointer-events: auto; }
+    .main-layout { display: flex; width: 100vw; height: 100vh; background: #000; }
+    .photo-wrapper { position: relative; height: 100vh; width: calc(100vh * 1.5); flex-shrink: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #000; }
+    #photoPreview { width: 100%; height: 100%; object-fit: cover; background-color: #000; }
+    .control-zone { flex: 1; min-width: 80px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.2rem; padding: 1rem; background: linear-gradient(90deg, rgba(0,0,0,0.8) 0%, #1a1a1a 100%); }
+    .action-btn { width: 70px; height: 70px; border-radius: 50%; border: 3px solid white; color: white; font-size: 1.8rem; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease; }
+    .action-btn:hover { transform: scale(1.08); }
+    .action-btn:active { transform: scale(0.95); }
+    .btn-print { background: linear-gradient(180deg, #28a745 0%, #1e7e34 100%); box-shadow: 0 4px 20px rgba(40, 167, 69, 0.5); }
+    .btn-telegram { background: linear-gradient(180deg, #0088cc 0%, #006699 100%); box-shadow: 0 4px 20px rgba(0, 136, 204, 0.5); }
+    .btn-retake { background: linear-gradient(180deg, #fd7e14 0%, #dc6600 100%); box-shadow: 0 4px 20px rgba(253, 126, 20, 0.5); }
+    .btn-close-review { background: linear-gradient(180deg, #6c757d 0%, #495057 100%); box-shadow: 0 4px 20px rgba(108, 117, 125, 0.5); width: 55px; height: 55px; font-size: 1.4rem; }
+    .qr-popup { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; align-items: center; justify-content: center; z-index: 200; backdrop-filter: blur(10px); }
+    .qr-popup.show { display: flex; }
+    .qr-content { background: white; border-radius: 24px; padding: 2.5rem; text-align: center; max-width: 90vw; max-height: 90vh; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+    .qr-content h3 { color: #333; margin-bottom: 1rem; font-size: 1.8rem; }
+    .qr-content p { color: #666; margin-bottom: 1.5rem; font-size: 1.1rem; }
+    .qr-content img { pointer-events: auto; max-width: 280px; max-height: 280px; }
+    .qr-close-btn { margin-top: 1.5rem; padding: 1rem 2.5rem; font-size: 1.2rem; background: #dc3545; color: white; border: none; border-radius: 50px; cursor: pointer; transition: all 0.2s; }
+    .status-indicator { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); padding: 0.75rem 1.5rem; border-radius: 30px; color: white; font-size: 0.9rem; z-index: 10; backdrop-filter: blur(10px); display: none; }
+    .status-indicator.show { display: block; }
+    .inactivity-bar { position: absolute; bottom: 0; left: 0; height: 4px; background: linear-gradient(90deg, #dc3545, #ff6b7a); width: 100%; transform-origin: left; }
+    </style>
+    <div class="main-layout">
         <div class="photo-wrapper">
-            <img src="{{ url_for('serve_photo', filename=photo) }}" 
-                 alt="Photo capturée" 
-                 class="photo-preview"
-                 id="photoPreview">
+            <img id="photoPreview" src="" alt="Photo capturee">
+            <div class="status-indicator" id="statusIndicator"><i class="fas fa-spinner fa-spin me-2"></i><span id="statusText">Chargement...</span></div>
+            <div class="inactivity-bar" id="inactivityBar"></div>
+        </div>
+        <div class="control-zone">
+            <button class="action-btn btn-print" id="printBtn" onclick="printPhoto()" title="Imprimer"><i class="fas fa-print"></i></button>
+            <button class="action-btn btn-telegram" id="telegramBtn" onclick="showQRCode()" title="Envoyer par Telegram"><i class="fab fa-telegram-plane"></i></button>
+            <button class="action-btn btn-retake" onclick="retakePhoto()" title="Reprendre une photo"><i class="fas fa-redo"></i></button>
+            <div style="height: 1px; width: 40px; background: rgba(255,255,255,0.2); margin: 0.5rem 0;"></div>
+            <button class="action-btn btn-close-review" onclick="closeReview()" title="Fermer"><i class="fas fa-times"></i></button>
         </div>
     </div>
-    
-    <!-- Zone actions (droite) -->
-    <div class="actions-zone">
-        <!-- QR Code Telegram -->
-        {% if config.telegram_enabled %}
-        <div class="qrcode-section" id="qrcodeSection">
-            <h6><i class="fab fa-telegram me-1"></i> Rejoignez-nous !</h6>
-            <div id="qrcodeContainer">
-                <div class="text-muted">
-                    <i class="fas fa-spinner fa-spin"></i>
-                    <small>Chargement...</small>
-                </div>
-            </div>
-            <p class="mt-2">Scannez pour voir toutes les photos</p>
-        </div>
-        {% endif %}
-        
-        <!-- Boutons d'action -->
-        <div class="d-flex flex-column gap-2 mt-auto">
-            {% if config.effect_enabled %}
-            <button class="action-btn btn-effect" onclick="applyEffect()">
-                <i class="fas fa-magic"></i>
-                Effet IA
-            </button>
-            {% endif %}
-            
-            {% if config.printer_enabled %}
-            <button class="action-btn btn-print" onclick="printPhoto()">
-                <i class="fas fa-print"></i>
-                Imprimer
-            </button>
-            {% endif %}
-            
-            <a href="{{ url_for('index') }}" class="action-btn btn-retake">
-                <i class="fas fa-redo"></i>
-                Reprendre
-            </a>
-            
-            <button class="action-btn btn-delete" onclick="deletePhoto()">
-                <i class="fas fa-trash"></i>
-                Supprimer
-            </button>
-        </div>
-    </div>
-</div>
-
-<!-- Overlay d'impression en plein écran -->
-<div id="printOverlay" class="d-none" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); z-index: 9999; display: flex; align-items: center; justify-content: center;">
-    <div class="text-center text-white">
-        <div class="mb-4">
-            <i class="fas fa-spinner fa-spin" style="font-size: 4rem;"></i>
-        </div>
-        <h2 class="mb-3">Impression en cours...</h2>
-        <p class="mb-0">Veuillez patienter</p>
-    </div>
-</div>
-
-<!-- Overlay d'effet IA en plein écran -->
-<div id="effectOverlay" class="d-none" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); z-index: 9999; display: flex; align-items: center; justify-content: center;">
-    <div class="text-center text-white">
-        <div class="mb-4">
-            <i class="fas fa-magic fa-spin" style="font-size: 4rem; color: #ffc107;"></i>
-        </div>
-        <h2 class="mb-3">Application de l'effet IA...</h2>
-        <p class="mb-0">Transformation en cours, veuillez patienter</p>
-    </div>
-</div>
-
-<!-- Modale de confirmation de suppression -->
-<div class="modal fade" id="deletePhotoModal" tabindex="-1" aria-labelledby="deletePhotoModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-danger text-white">
-                <h5 class="modal-title" id="deletePhotoModalLabel">
-                    <i class="fas fa-exclamation-triangle me-2"></i>
-                    Supprimer la photo
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body text-center">
-                <div class="mb-3">
-                    <i class="fas fa-trash-alt text-danger" style="font-size: 3rem;"></i>
-                </div>
-                <h6 class="mb-3">Êtes-vous sûr de vouloir supprimer cette photo ?</h6>
-                <div class="alert alert-warning" role="alert">
-                    <i class="fas fa-exclamation-triangle me-2"></i>
-                    <strong>Attention :</strong> Cette action est irréversible !
-                </div>
-                <p class="text-muted mb-0">
-                    <small>La photo sera définitivement supprimée du système</small>
-                </p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="fas fa-times me-2"></i>
-                    Annuler
-                </button>
-                <button type="button" class="btn btn-danger" onclick="confirmDeletePhoto()">
-                    <i class="fas fa-trash-alt me-2"></i>
-                    Supprimer la photo
-                </button>
-            </div>
+    <div class="qr-popup" id="qrPopup">
+        <div class="qr-content">
+            <h3><i class="fab fa-telegram me-2"></i>Telegram</h3>
+            <p>Scannez ce QR code pour recevoir vos photos sur Telegram</p>
+            <img id="qrCodeImage" src="" alt="QR Code Telegram">
+            <div id="qrLoading" style="padding: 2rem;"><i class="fas fa-spinner fa-spin fa-3x" style="color: #0088cc;"></i><p style="margin-top: 1rem; color: #666;">Chargement du QR Code...</p></div>
+            <div id="qrError" style="display: none; padding: 2rem; color: #dc3545;"><i class="fas fa-exclamation-triangle fa-3x"></i><p style="margin-top: 1rem;">Impossible de generer le QR Code.</p></div>
+            <br><button class="qr-close-btn" onclick="closeQRPopup()"><i class="fas fa-check me-2"></i>Fermer</button>
         </div>
     </div>
 </div>
@@ -267,214 +66,96 @@
 
 {% block scripts %}
 <script>
-// Charger le QR Code Telegram au chargement de la page
+let currentPhotoPath = '';
+let inactivityTimer = null;
+let inactivityDuration = 30000;
+let inactivityStartTime = null;
+let inactivityAnimationFrame = null;
+
 document.addEventListener('DOMContentLoaded', function() {
-    loadTelegramQRCode();
+    loadLastPhoto();
+    setupActivityTracking();
+    startInactivityTimer();
+    checkTelegramConfig();
+    checkPrinterConfig();
 });
 
-async function loadTelegramQRCode() {
-    const qrcodeContainer = document.getElementById('qrcodeContainer');
-    if (!qrcodeContainer) return; // Telegram non activé
-    
-    try {
-        const response = await fetch('/api/telegram/qrcode');
-        const data = await response.json();
-        
-        if (data.success) {
-            qrcodeContainer.innerHTML = `<img src="${data.url}" alt="QR Code Telegram" style="max-width: 150px;">`;
-        } else {
-            qrcodeContainer.innerHTML = `<small class="text-muted">${data.error || 'QR Code non disponible'}</small>`;
+function loadLastPhoto() {
+    fetch('/api/last_photo').then(r => r.json()).then(data => {
+        if (data.success && data.photo_path) {
+            currentPhotoPath = data.photo_path;
+            document.getElementById('photoPreview').src = '/' + data.photo_path + '?t=' + Date.now();
         }
-    } catch (error) {
-        console.error('Erreur chargement QR Code:', error);
-        qrcodeContainer.innerHTML = '<small class="text-muted">Erreur de chargement</small>';
-    }
+    });
 }
 
-async function printPhoto() {
-    const printBtn = event.target;
-    const originalContent = printBtn.innerHTML;
-    const overlay = document.getElementById('printOverlay');
-    
-    // Désactiver le bouton et afficher l'overlay
-    printBtn.disabled = true;
-    printBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Impression...';
-    overlay.classList.remove('d-none');
-    overlay.style.display = 'flex';
-    
-    try {
-        const response = await fetch('/print_photo', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            }
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            // Succès de l'impression - modifier le contenu de l'overlay
-            overlay.innerHTML = 
-                '<div class="text-center text-white">' +
-                '<div class="mb-4">' +
-                '<i class="fas fa-check-circle" style="font-size: 4rem; color: #28a745;"></i>' +
-                '</div>' +
-                '<h2 class="mb-3">Impression terminée !</h2>' +
-                '<p class="mb-0">Redirection en cours...</p>' +
-                '</div>';
-            
-            // Rediriger vers l'accueil après 3 secondes
-            setTimeout(() => {
-                window.location.href = '/';
-            }, 3000);
-            
-        } else if (result.error_type === 'no_paper') {
-            // Cas spécifique du manque de papier - rediriger immédiatement vers l'index
-            overlay.innerHTML = 
-                '<div class="text-center text-white">' +
-                '<div class="mb-4">' +
-                '<i class="fas fa-exclamation-triangle" style="font-size: 4rem; color: #ffc107;"></i>' +
-                '</div>' +
-                '<h2 class="mb-3">Plus de papier !</h2>' +
-                '<p class="mb-0">Redirection en cours...</p>' +
-                '</div>';
-            
-            // Rediriger vers l'accueil avec paramètre pour afficher l'alerte
-            setTimeout(() => {
-                window.location.href = '/?show_paper_alert=1';
-            }, 2000);
-            
-        } else {
-            throw new Error(result.error || 'Erreur d\'impression');
-        }
-        
-    } catch (error) {
-        console.error('Erreur lors de l\'impression:', error);
-        
-        // Afficher l'erreur dans l'overlay
-        overlay.innerHTML = 
-            '<div class="text-center text-white">' +
-            '<div class="mb-4">' +
-            '<i class="fas fa-exclamation-triangle" style="font-size: 4rem; color: #dc3545;"></i>' +
-            '</div>' +
-            '<h2 class="mb-3">Erreur d\'impression</h2>' +
-            '<p class="mb-3">' + error.message + '</p>' +
-            '<button class="btn btn-light" onclick="closeOverlay()">Fermer</button>' +
-            '</div>';
-        
-        // Réactiver le bouton
-        printBtn.disabled = false;
-        printBtn.innerHTML = originalContent;
-    }
+function checkTelegramConfig() {
+    fetch('/api/config').then(r => r.json()).then(data => {
+        if (!data.telegram_enabled || !data.telegram_chat_id) document.getElementById('telegramBtn').style.display = 'none';
+    });
 }
 
-function closeOverlay() {
-    const overlay = document.getElementById('printOverlay');
-    overlay.classList.add('d-none');
-    overlay.style.display = 'none';
+function checkPrinterConfig() {
+    fetch('/api/config').then(r => r.json()).then(data => {
+        if (!data.print_enabled) document.getElementById('printBtn').style.display = 'none';
+    });
 }
 
-function deletePhoto() {
-    // Ouvrir la modale de confirmation
-    const modal = new bootstrap.Modal(document.getElementById('deletePhotoModal'));
-    modal.show();
+function showStatus(message) {
+    const indicator = document.getElementById('statusIndicator');
+    document.getElementById('statusText').textContent = message;
+    indicator.classList.add('show');
+    setTimeout(() => indicator.classList.remove('show'), 3000);
 }
 
-async function confirmDeletePhoto() {
-    // Fermer la modale
-    const modal = bootstrap.Modal.getInstance(document.getElementById('deletePhotoModal'));
-    modal.hide();
-    
-    try {
-        const response = await fetch('/delete_current', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            }
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            // Rediriger vers l'accueil
-            window.location.href = '/';
-        } else {
-            throw new Error(result.error || 'Erreur de suppression');
-        }
-        
-    } catch (error) {
-        console.error('Erreur lors de la suppression:', error);
-        alert('Erreur lors de la suppression: ' + error.message);
-    }
+function setupActivityTracking() {
+    ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'].forEach(e => document.addEventListener(e, resetInactivityTimer, true));
 }
 
-async function applyEffect() {
-    const effectBtn = event.target;
-    const originalContent = effectBtn.innerHTML;
-    const overlay = document.getElementById('effectOverlay');
-    
-    // Désactiver le bouton et afficher l'overlay
-    effectBtn.disabled = true;
-    effectBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Traitement...';
-    overlay.classList.remove('d-none');
-    overlay.style.display = 'flex';
-    
-    try {
-        const response = await fetch('/apply_effect', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            }
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            // Succès de l'effet - modifier le contenu de l'overlay
-            overlay.innerHTML = 
-                '<div class="text-center text-white">' +
-                '<div class="mb-4">' +
-                '<i class="fas fa-check-circle" style="font-size: 4rem; color: #28a745;"></i>' +
-                '</div>' +
-                '<h2 class="mb-3">Effet appliqué avec succès !</h2>' +
-                '<p class="mb-0">Rechargement de la page...</p>' +
-                '</div>';
-            
-            // Recharger la page après 2 secondes pour afficher la nouvelle image
-            setTimeout(() => {
-                window.location.reload();
-            }, 2000);
-            
-        } else {
-            throw new Error(result.error || 'Erreur lors de l\'application de l\'effet');
-        }
-        
-    } catch (error) {
-        console.error('Erreur lors de l\'application de l\'effet:', error);
-        
-        // Afficher l'erreur dans l'overlay
-        overlay.innerHTML = 
-            '<div class="text-center text-white">' +
-            '<div class="mb-4">' +
-            '<i class="fas fa-exclamation-triangle" style="font-size: 4rem; color: #dc3545;"></i>' +
-            '</div>' +
-            '<h2 class="mb-3">Erreur d\'effet IA</h2>' +
-            '<p class="mb-3">' + error.message + '</p>' +
-            '<button class="btn btn-light" onclick="closeEffectOverlay()">Fermer</button>' +
-            '</div>';
-        
-        // Réactiver le bouton
-        effectBtn.disabled = false;
-        effectBtn.innerHTML = originalContent;
-    }
+function resetInactivityTimer() {
+    if (inactivityTimer) clearTimeout(inactivityTimer);
+    if (inactivityAnimationFrame) cancelAnimationFrame(inactivityAnimationFrame);
+    document.getElementById('inactivityBar').style.transform = 'scaleX(1)';
+    startInactivityTimer();
 }
 
-function closeEffectOverlay() {
-    const overlay = document.getElementById('effectOverlay');
-    overlay.classList.add('d-none');
-    overlay.style.display = 'none';
+function startInactivityTimer() {
+    inactivityStartTime = Date.now();
+    animateInactivityBar();
+    inactivityTimer = setTimeout(() => closeReview(), inactivityDuration);
 }
 
+function animateInactivityBar() {
+    const bar = document.getElementById('inactivityBar');
+    const remaining = 1 - ((Date.now() - inactivityStartTime) / inactivityDuration);
+    if (remaining > 0) { bar.style.transform = 'scaleX(' + remaining + ')'; inactivityAnimationFrame = requestAnimationFrame(animateInactivityBar); }
+    else bar.style.transform = 'scaleX(0)';
+}
 
+function printPhoto() {
+    if (!currentPhotoPath) { showStatus('Aucune photo'); return; }
+    showStatus('Impression en cours...');
+    fetch('/print', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ photo_path: currentPhotoPath }) })
+        .then(r => r.json()).then(data => showStatus(data.success ? 'Envoye a l\'imprimante !' : data.error));
+    resetInactivityTimer();
+}
+
+function showQRCode() {
+    const popup = document.getElementById('qrPopup');
+    popup.classList.add('show');
+    document.getElementById('qrCodeImage').style.display = 'none';
+    document.getElementById('qrLoading').style.display = 'block';
+    document.getElementById('qrError').style.display = 'none';
+    fetch('/api/telegram/qrcode').then(r => r.json()).then(data => {
+        document.getElementById('qrLoading').style.display = 'none';
+        if (data.success && data.qrcode_url) { document.getElementById('qrCodeImage').src = data.qrcode_url + '?t=' + Date.now(); document.getElementById('qrCodeImage').style.display = 'block'; }
+        else document.getElementById('qrError').style.display = 'block';
+    }).catch(() => { document.getElementById('qrLoading').style.display = 'none'; document.getElementById('qrError').style.display = 'block'; });
+    resetInactivityTimer();
+}
+
+function closeQRPopup() { document.getElementById('qrPopup').classList.remove('show'); resetInactivityTimer(); }
+function retakePhoto() { window.location.href = '/'; }
+function closeReview() { window.location.href = '/'; }
 </script>
 {% endblock %}

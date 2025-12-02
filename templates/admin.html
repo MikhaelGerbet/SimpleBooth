@@ -3,6 +3,14 @@
 {% block title %}WizardPhotoBox - Administration{% endblock %}
 
 {% block content %}
+<style>
+    /* Permettre le scroll sur la page admin */
+    html, body {
+        overflow: auto !important;
+        height: auto !important;
+    }
+</style>
+
 <!-- Toast de confirmation -->
 <div class="toast-container position-fixed top-0 end-0 p-3">
     <div id="configSavedToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true" data-show="{{ 'true' if show_toast else 'false' }}">
