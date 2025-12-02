@@ -381,6 +381,8 @@ def apply_effect_cloudflare(photo_path):
     
     try:
         import requests
+        from PIL import Image
+        import io
         
         logger.info("[CLOUDFLARE AI] Début de l'application de l'effet")
         logger.info(f"[CLOUDFLARE AI] Photo source: {photo_path}")
@@ -389,26 +391,34 @@ def apply_effect_cloudflare(photo_path):
         api_token = config.get('cloudflare_api_token')
         prompt = config.get('effect_prompt', 'Transform this photo into a beautiful ghibli style anime illustration')
         
-        # Lire et encoder l'image en base64
-        logger.info("[CLOUDFLARE AI] Lecture et encodage de l'image...")
-        with open(photo_path, 'rb') as img_file:
-            img_data = img_file.read()
-            img_base64 = base64.b64encode(img_data).decode('utf-8')
+        # Redimensionner l'image pour Cloudflare (max 1024x1024)
+        logger.info("[CLOUDFLARE AI] Préparation de l'image...")
+        with Image.open(photo_path) as img:
+            # Convertir en RGB si nécessaire
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            
+            # Redimensionner à 1024x1024 max
+            img.thumbnail((1024, 1024), Image.LANCZOS)
+            
+            # Sauvegarder en mémoire
+            img_buffer = io.BytesIO()
+            img.save(img_buffer, format='PNG')
+            img_data = img_buffer.getvalue()
         
-        # API Cloudflare Workers AI - Image-to-Image avec Stable Diffusion
-        url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/@cf/stabilityai/stable-diffusion-xl-base-1.0"
+        # API Cloudflare Workers AI - Image-to-Image
+        # Utiliser le modèle img2img
+        url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/@cf/bytedance/stable-diffusion-xl-lightning"
         
         headers = {
             "Authorization": f"Bearer {api_token}",
             "Content-Type": "application/json"
         }
         
-        # Payload pour génération d'image
+        # Payload pour génération d'image (text-to-image, car img2img limité sur CF)
         payload = {
             "prompt": prompt,
-            "image": img_base64,
-            "strength": 0.75,  # Force de transformation (0.0 = original, 1.0 = complètement nouveau)
-            "num_steps": config.get('effect_steps', 20),
+            "num_steps": min(config.get('effect_steps', 8), 8),  # Lightning max 8 steps
             "guidance": 7.5
         }
         
@@ -420,49 +430,59 @@ def apply_effect_cloudflare(photo_path):
         logger.info(f"[CLOUDFLARE AI] Statut réponse: {response.status_code}")
         
         if response.status_code == 200:
-            result = response.json()
+            # Cloudflare retourne directement l'image binaire (PNG)
+            content_type = response.headers.get('content-type', '')
             
-            if result.get('success') and result.get('result'):
-                # L'image est retournée en base64
-                image_base64 = result['result'].get('image')
+            if 'image' in content_type:
+                # L'image est retournée directement en binaire
+                image_data = response.content
                 
-                if image_base64:
-                    # Décoder et sauvegarder l'image
-                    image_data = base64.b64decode(image_base64)
+                # S'assurer que le dossier effet existe
+                os.makedirs(EFFECT_FOLDER, exist_ok=True)
+                
+                # Créer un nouveau nom de fichier
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                effect_filename = f'effect_{timestamp}.png'
+                effect_path = os.path.join(EFFECT_FOLDER, effect_filename)
+                
+                with open(effect_path, 'wb') as f:
+                    f.write(image_data)
+                
+                logger.info(f"[CLOUDFLARE AI] Image sauvegardée: {effect_path}")
+                
+                # Mettre à jour la photo actuelle
+                current_photo = effect_filename
+                
+                # Envoyer sur Telegram si activé
+                send_type = config.get('telegram_send_type', 'photos')
+                if send_type in ['effet', 'both']:
+                    threading.Thread(target=send_to_telegram, args=(effect_path, config, "effet")).start()
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'Effet appliqué avec succès!',
+                    'new_filename': effect_filename
+                })
+            else:
+                # Réponse JSON (erreur ou autre format)
+                try:
+                    result = response.json()
+                    if result.get('errors'):
+                        error_msg = result.get('errors')
+                        logger.info(f"[CLOUDFLARE AI] Erreur: {error_msg}")
+                        return jsonify({'success': False, 'error': f'Erreur Cloudflare: {error_msg}'})
+                except:
+                    pass
                     
-                    # S'assurer que le dossier effet existe
-                    os.makedirs(EFFECT_FOLDER, exist_ok=True)
-                    
-                    # Créer un nouveau nom de fichier
-                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                    effect_filename = f'effect_{timestamp}.jpg'
-                    effect_path = os.path.join(EFFECT_FOLDER, effect_filename)
-                    
-                    with open(effect_path, 'wb') as f:
-                        f.write(image_data)
-                    
-                    logger.info(f"[CLOUDFLARE AI] Image sauvegardée: {effect_path}")
-                    
-                    # Mettre à jour la photo actuelle
-                    current_photo = effect_filename
-                    
-                    # Envoyer sur Telegram si activé
-                    send_type = config.get('telegram_send_type', 'photos')
-                    if send_type in ['effet', 'both']:
-                        threading.Thread(target=send_to_telegram, args=(effect_path, config, "effet")).start()
-                    
-                    return jsonify({
-                        'success': True,
-                        'message': 'Effet appliqué avec succès!',
-                        'new_filename': effect_filename
-                    })
-            
-            # Si pas d'image, essayer le modèle text-to-image comme fallback
-            logger.info("[CLOUDFLARE AI] Tentative avec modèle text-to-image...")
+            # Fallback text-to-image
+            logger.info("[CLOUDFLARE AI] Tentative avec modèle SDXL base...")
             return apply_effect_cloudflare_text2img(photo_path, prompt)
             
         else:
-            error_msg = response.json().get('errors', [{'message': 'Erreur inconnue'}])
+            try:
+                error_msg = response.json().get('errors', [{'message': 'Erreur inconnue'}])
+            except:
+                error_msg = response.text[:200]
             logger.info(f"[CLOUDFLARE AI] Erreur: {error_msg}")
             return jsonify({'success': False, 'error': f'Erreur Cloudflare: {error_msg}'})
             
