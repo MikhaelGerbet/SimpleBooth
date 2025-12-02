@@ -3,9 +3,9 @@
 {% block title %}WizardPhotoBox{% endblock %}
 
 {% block content %}
-<div class="container-fluid p-0" style="height: 100vh; overflow: hidden; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: #1a1a1a;">
+<div class="container-fluid p-0" style="height: 100vh; overflow: hidden; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: #000;">
     <style>
-    /* Empêcher la sélection sur tous les éléments interactifs */
+    /* Empêcher la sélection sur tous les éléments */
     * {
         -webkit-user-select: none;
         -moz-user-select: none;
@@ -15,64 +15,39 @@
         -webkit-tap-highlight-color: transparent;
     }
     
-    /* Empêcher le drag sur les images */
     img {
         -webkit-user-drag: none;
-        -khtml-user-drag: none;
-        -moz-user-drag: none;
-        -o-user-drag: none;
-        user-drag: none;
         pointer-events: none;
     }
     
-    /* Réactiver pointer-events sur les boutons */
     button, .btn, a {
         pointer-events: auto;
     }
     
-    /* Layout principal : preview à gauche, options à droite */
+    /* Layout: Preview 100% hauteur + contrôles à droite */
     .main-layout {
         display: flex;
-        height: 100vh;
         width: 100vw;
+        height: 100vh;
+        background: #000;
     }
     
-    /* Zone preview (gauche) - prend l'espace restant */
-    .preview-zone {
-        flex: 1;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 1rem;
-        overflow: hidden;
-    }
-    
-    /* Wrapper avec ratio 3:2 (15x10 paysage) */
+    /* Preview: 100% hauteur, largeur = hauteur × 1.5 (ratio 15:10) */
     .video-wrapper {
         position: relative;
-        width: 100%;
-        max-height: 100%;
-        aspect-ratio: 3 / 2;
+        height: 100vh;
+        width: calc(100vh * 1.5); /* 15:10 = 1.5 */
+        flex-shrink: 0;
         overflow: hidden;
-        border-radius: 15px;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
     }
     
-    /* Vidéo qui remplit le conteneur */
     #videoPreview {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        min-width: 100%;
-        min-height: 100%;
-        width: auto;
+        width: 100%;
         height: 100%;
         object-fit: cover;
         background-color: #000;
     }
     
-    /* Overlay parfaitement superposé */
     .overlay-preview {
         position: absolute;
         top: 0;
@@ -84,208 +59,221 @@
         object-fit: cover;
     }
     
-    /* Zone options (droite) */
-    .options-zone {
-        width: 280px;
-        min-width: 280px;
-        background: linear-gradient(180deg, #2d2d2d 0%, #1a1a1a 100%);
-        padding: 1.5rem;
+    /* Zone contrôles à droite: espace restant = 100vw - (100vh × 1.5) */
+    .control-zone {
+        flex: 1;
+        min-width: 80px;
         display: flex;
         flex-direction: column;
+        align-items: center;
+        justify-content: center;
         gap: 1.5rem;
-        border-left: 1px solid #444;
+        padding: 1rem;
+        background: linear-gradient(90deg, rgba(0,0,0,0.8) 0%, #1a1a1a 100%);
     }
     
     /* Bouton capture principal */
     .capture-btn {
-        width: 100%;
-        padding: 1.5rem;
-        font-size: 1.5rem;
-        border-radius: 15px;
+        width: 90px;
+        height: 90px;
+        border-radius: 50%;
         background: linear-gradient(180deg, #dc3545 0%, #a71d2a 100%);
-        border: none;
+        border: 4px solid white;
         color: white;
-        box-shadow: 0 4px 15px rgba(220, 53, 69, 0.4);
-        transition: all 0.2s ease;
-    }
-    
-    .capture-btn:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(220, 53, 69, 0.5);
-    }
-    
-    .capture-btn:active {
-        transform: translateY(0);
-    }
-    
-    /* Section d'options */
-    .option-section {
-        background: rgba(255,255,255,0.05);
-        border-radius: 12px;
-        padding: 1rem;
-    }
-    
-    .option-title {
-        color: #aaa;
-        font-size: 0.85rem;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        margin-bottom: 0.75rem;
+        font-size: 2.2rem;
         display: flex;
         align-items: center;
-        gap: 0.5rem;
-    }
-    
-    /* Boutons toggle pour les options */
-    .option-buttons {
-        display: flex;
-        gap: 0.5rem;
-        flex-wrap: wrap;
-    }
-    
-    .option-btn {
-        flex: 1;
-        min-width: 70px;
-        padding: 0.75rem 0.5rem;
-        border: 2px solid #444;
-        background: transparent;
-        color: #ccc;
-        border-radius: 8px;
-        font-size: 0.9rem;
+        justify-content: center;
+        box-shadow: 0 4px 25px rgba(220, 53, 69, 0.6);
         transition: all 0.2s ease;
         cursor: pointer;
     }
     
-    .option-btn:hover {
-        border-color: #666;
-        color: #fff;
+    .capture-btn:hover {
+        transform: scale(1.05);
+        box-shadow: 0 6px 30px rgba(220, 53, 69, 0.8);
     }
     
-    .option-btn.active {
+    .capture-btn:active {
+        transform: scale(0.95);
+    }
+    
+    /* Boutons d'options */
+    .option-toggle {
+        width: 55px;
+        height: 55px;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.1);
+        border: 2px solid rgba(255,255,255,0.25);
+        color: white;
+        font-size: 1.3rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        position: relative;
+    }
+    
+    .option-toggle:hover {
+        background: rgba(255,255,255,0.2);
+        border-color: rgba(255,255,255,0.4);
+    }
+    
+    .option-toggle .value-badge {
+        position: absolute;
+        bottom: -6px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 0.65rem;
+        font-weight: bold;
+        background: #0d6efd;
+        padding: 2px 8px;
+        border-radius: 10px;
+        white-space: nowrap;
+    }
+    
+    /* Popup d'options - s'affiche à gauche du bouton */
+    .option-wrapper {
+        position: relative;
+    }
+    
+    .option-popup {
+        position: absolute;
+        right: 70px;
+        top: 50%;
+        transform: translateY(-50%) scale(0.9);
+        background: rgba(20,20,20,0.95);
+        backdrop-filter: blur(20px);
+        border-radius: 12px;
+        padding: 0.5rem;
+        display: none;
+        flex-direction: column;
+        gap: 0.4rem;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+        border: 1px solid rgba(255,255,255,0.1);
+        opacity: 0;
+        transition: all 0.15s ease;
+        z-index: 100;
+    }
+    
+    .option-popup.show {
+        display: flex;
+        opacity: 1;
+        transform: translateY(-50%) scale(1);
+    }
+    
+    .popup-btn {
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        background: rgba(255,255,255,0.08);
+        border: 2px solid transparent;
+        color: white;
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        white-space: nowrap;
+        text-align: center;
+    }
+    
+    .popup-btn:hover {
+        background: rgba(255,255,255,0.15);
+    }
+    
+    .popup-btn.active {
+        background: rgba(13, 110, 253, 0.25);
         border-color: #0d6efd;
-        background: rgba(13, 110, 253, 0.2);
-        color: #fff;
     }
     
-    /* Ajustements pour petits écrans */
+    /* Countdown */
+    .countdown {
+        font-size: 12rem;
+        font-weight: bold;
+        color: white;
+        text-shadow: 0 0 60px rgba(0,0,0,0.9);
+        z-index: 60;
+    }
+    
+    /* Responsive: si écran trop étroit, réduire */
     @media (max-width: 900px) {
-        .options-zone {
-            width: 200px;
-            min-width: 200px;
-            padding: 1rem;
-        }
-        
         .capture-btn {
-            padding: 1rem;
-            font-size: 1.2rem;
+            width: 70px;
+            height: 70px;
+            font-size: 1.8rem;
         }
-        
-        .option-btn {
-            padding: 0.5rem;
-            font-size: 0.8rem;
+        .option-toggle {
+            width: 45px;
+            height: 45px;
+            font-size: 1.1rem;
         }
-    }
-    
-    @media (max-width: 600px) {
-        .main-layout {
-            flex-direction: column;
-        }
-        
-        .options-zone {
-            width: 100%;
-            min-width: unset;
-            flex-direction: row;
-            flex-wrap: wrap;
-            border-left: none;
-            border-top: 1px solid #444;
-            padding: 0.75rem;
-            gap: 0.75rem;
-        }
-        
-        .option-section {
-            flex: 1;
-            min-width: 120px;
+        .countdown {
+            font-size: 8rem;
         }
     }
     </style>
     
     <!-- Layout principal -->
     <div class="main-layout">
-        <!-- Zone preview (gauche) -->
-        <div class="preview-zone">
-            <div class="video-wrapper">
-                <img id="videoPreview" 
-                     src="{{ url_for('video_stream') }}" 
-                     alt="Flux vidéo caméra">
-                
-                <!-- Overlay transparent superposé -->
-                <img id="overlayPreview" 
-                     class="overlay-preview d-none" 
-                     alt="Overlay">
-                
-                <!-- Countdown overlay -->
-                <div class="countdown d-none position-absolute top-50 start-50 translate-middle" 
-                     id="countdown" style="z-index: 10;"></div>
-            </div>
+        <!-- Preview 100% hauteur, ratio 15:10 -->
+        <div class="video-wrapper">
+            <img id="videoPreview" 
+                 src="{{ url_for('video_stream') }}" 
+                 alt="Flux vidéo caméra">
+            
+            <img id="overlayPreview" 
+                 class="overlay-preview d-none" 
+                 alt="Overlay">
+            
+            <div class="countdown d-none position-absolute top-50 start-50 translate-middle" 
+                 id="countdown"></div>
         </div>
         
-        <!-- Zone options (droite) -->
-        <div class="options-zone">
-            <!-- Bouton capture principal -->
+        <!-- Zone contrôles à droite -->
+        <div class="control-zone">
+            <!-- Timer -->
+            <div class="option-wrapper">
+                <button class="option-toggle" id="timerToggle" onclick="togglePopup('timerPopup')">
+                    <i class="fas fa-clock"></i>
+                    <span class="value-badge" id="timerBadge">5s</span>
+                </button>
+                <div class="option-popup" id="timerPopup">
+                    <button class="popup-btn" onclick="setTimer(3)">3s</button>
+                    <button class="popup-btn active" onclick="setTimer(5)">5s</button>
+                    <button class="popup-btn" onclick="setTimer(10)">10s</button>
+                </div>
+            </div>
+            
+            <!-- Bouton capture central -->
             <button id="captureBtn" class="capture-btn" onclick="capturePhoto()">
-                <i class="fas fa-camera me-2"></i>
-                PHOTO
+                <i class="fas fa-camera"></i>
             </button>
             
-            <!-- Retardateur -->
-            <div class="option-section">
-                <div class="option-title">
-                    <i class="fas fa-clock"></i>
-                    Retardateur
-                </div>
-                <div class="option-buttons">
-                    <button class="option-btn timer-btn" data-timer="3" onclick="setTimer(3)">3s</button>
-                    <button class="option-btn timer-btn active" data-timer="5" onclick="setTimer(5)">5s</button>
-                    <button class="option-btn timer-btn" data-timer="10" onclick="setTimer(10)">10s</button>
-                </div>
-            </div>
-            
-            <!-- Style photo -->
-            <div class="option-section">
-                <div class="option-title">
+            <!-- Style -->
+            <div class="option-wrapper">
+                <button class="option-toggle" id="styleToggle" onclick="togglePopup('stylePopup')">
                     <i class="fas fa-palette"></i>
-                    Style
+                </button>
+                <div class="option-popup" id="stylePopup">
+                    <button class="popup-btn active" onclick="setStyle('color')">Couleur</button>
+                    <button class="popup-btn" onclick="setStyle('bw')">N&B</button>
                 </div>
-                <div class="option-buttons">
-                    <button class="option-btn style-btn active" data-style="color" onclick="setStyle('color')">
-                        <i class="fas fa-rainbow me-1"></i>Couleur
-                    </button>
-                    <button class="option-btn style-btn" data-style="bw" onclick="setStyle('bw')">
-                        <i class="fas fa-adjust me-1"></i>N&B
-                    </button>
-                </div>
-            </div>
-            
-            <!-- Indicateur d'état -->
-            <div class="mt-auto text-center">
-                <small class="text-muted" id="statusText">Prêt</small>
             </div>
         </div>
     </div>
     
-    <!-- Flash blanc pour la prise de photo -->
+    <!-- Flash -->
     <div class="flash-overlay d-none position-fixed top-0 start-0 w-100 h-100" id="flashOverlay" 
          style="background-color: white; z-index: 100; display: flex; align-items: center; justify-content: center;">
-        <div style="font-size: 6rem; font-weight: bold; color: black; text-shadow: none;">CHEESE!</div>
+        <div style="font-size: 6rem; font-weight: bold; color: black;">CHEESE!</div>
     </div>
     
-    <!-- Alerte manque de papier -->
+    <!-- Alerte papier -->
     <div class="position-fixed top-0 start-50 translate-middle-x mt-3" style="z-index: 20; width: 90%; max-width: 500px;">
         <div class="alert alert-warning d-none d-flex align-items-center" id="paper-alert" style="border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
             <i class="fas fa-exclamation-triangle me-2"></i>
             <div>
                 <strong>Attention !</strong><br>
-                <small>Vérifiez le papier de l'imprimante avant de prendre une photo</small>
+                <small>Vérifiez le papier de l'imprimante</small>
             </div>
         </div>
     </div>
@@ -413,65 +401,97 @@ let isCapturing = false;
 let currentOverlayUrl = '';
 let selectedTimer = {{ config.timer_seconds | default(5) }};
 let selectedStyle = 'color';
+let activePopup = null;
 
-// Initialiser la caméra et l'overlay au chargement de la page
+// Initialiser au chargement
 document.addEventListener('DOMContentLoaded', function() {
     initCamera();
     loadOverlayPreview();
     initOptions();
     
-    // Vérifier périodiquement si l'overlay a changé (toutes les 5 secondes)
+    // Fermer les popups si on clique ailleurs
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.option-toggle') && !e.target.closest('.option-popup')) {
+            closeAllPopups();
+        }
+    });
+    
     setInterval(loadOverlayPreview, 5000);
 });
 
-// Initialiser les options (sélection par défaut)
+// Toggle popup
+function togglePopup(popupId) {
+    const popup = document.getElementById(popupId);
+    const isOpen = popup.classList.contains('show');
+    
+    closeAllPopups();
+    
+    if (!isOpen) {
+        popup.classList.add('show');
+        activePopup = popupId;
+    }
+}
+
+function closeAllPopups() {
+    document.querySelectorAll('.option-popup').forEach(p => p.classList.remove('show'));
+    activePopup = null;
+}
+
+// Initialiser les options
 function initOptions() {
-    // Sélectionner le timer par défaut
     setTimer(selectedTimer);
-    // Sélectionner le style par défaut
     setStyle(selectedStyle);
 }
 
 // Définir le retardateur
 function setTimer(seconds) {
     selectedTimer = seconds;
-    document.querySelectorAll('.timer-btn').forEach(btn => {
+    
+    // Mettre à jour les boutons dans le popup
+    document.querySelectorAll('#timerPopup .popup-btn').forEach(btn => {
         btn.classList.remove('active');
-        if (parseInt(btn.dataset.timer) === seconds) {
+        if (btn.textContent.trim() === seconds + 's') {
             btn.classList.add('active');
         }
     });
-    updateStatus();
+    
+    // Mettre à jour le badge
+    document.getElementById('timerBadge').textContent = seconds + 's';
+    
+    closeAllPopups();
 }
 
 // Définir le style photo
 function setStyle(style) {
     selectedStyle = style;
-    document.querySelectorAll('.style-btn').forEach(btn => {
+    
+    // Mettre à jour les boutons dans le popup
+    document.querySelectorAll('#stylePopup .popup-btn').forEach(btn => {
         btn.classList.remove('active');
-        if (btn.dataset.style === style) {
+        if ((style === 'color' && btn.textContent.includes('Couleur')) ||
+            (style === 'bw' && btn.textContent.includes('N&B'))) {
             btn.classList.add('active');
         }
     });
     
-    // Appliquer un filtre CSS sur le preview pour visualiser le style
-    const videoPreview = document.getElementById('videoPreview');
+    // Mettre à jour l'icône du toggle
+    const styleToggle = document.getElementById('styleToggle');
     if (style === 'bw') {
-        videoPreview.style.filter = 'grayscale(100%)';
+        styleToggle.innerHTML = '<i class="fas fa-adjust"></i>';
+        styleToggle.style.background = 'rgba(255,255,255,0.3)';
     } else {
-        videoPreview.style.filter = 'none';
+        styleToggle.innerHTML = '<i class="fas fa-palette"></i>';
+        styleToggle.style.background = 'rgba(255,255,255,0.15)';
     }
-    updateStatus();
+    
+    // Appliquer le filtre CSS sur le preview
+    const videoPreview = document.getElementById('videoPreview');
+    videoPreview.style.filter = style === 'bw' ? 'grayscale(100%)' : 'none';
+    
+    closeAllPopups();
 }
 
-// Mettre à jour le texte de statut
-function updateStatus() {
-    const statusText = document.getElementById('statusText');
-    const styleText = selectedStyle === 'bw' ? 'N&B' : 'Couleur';
-    statusText.textContent = `${selectedTimer}s · ${styleText}`;
-}
-
-// Charger l'overlay actuel pour l'afficher sur le flux vidéo
+// Charger l'overlay actuel
 function loadOverlayPreview() {
     fetch('/api/overlay/current')
         .then(response => response.json())
@@ -479,24 +499,19 @@ function loadOverlayPreview() {
             const overlayImg = document.getElementById('overlayPreview');
             const newUrl = data.enabled && data.url ? data.url : '';
             
-            // Ne mettre à jour que si l'overlay a changé
             if (newUrl !== currentOverlayUrl) {
                 currentOverlayUrl = newUrl;
                 
                 if (data.enabled && data.url) {
-                    overlayImg.src = data.url + '?t=' + Date.now(); // Cache-bust
+                    overlayImg.src = data.url + '?t=' + Date.now();
                     overlayImg.classList.remove('d-none');
-                    console.log('Overlay chargé:', data.overlay);
                 } else {
                     overlayImg.classList.add('d-none');
                     overlayImg.src = '';
-                    console.log('Overlay désactivé');
                 }
             }
         })
-        .catch(error => {
-            console.error('Erreur lors du chargement de l\'overlay:', error);
-        });
+        .catch(error => console.error('Erreur overlay:', error));
 }
 
 function initCamera() {
