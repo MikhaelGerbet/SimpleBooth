@@ -118,11 +118,15 @@
 {% block scripts %}
 <script>
 let isCapturing = false;
+let currentOverlayUrl = '';
 
 // Initialiser la caméra et l'overlay au chargement de la page
 document.addEventListener('DOMContentLoaded', function() {
     initCamera();
     loadOverlayPreview();
+    
+    // Vérifier périodiquement si l'overlay a changé (toutes les 5 secondes)
+    setInterval(loadOverlayPreview, 5000);
 });
 
 // Charger l'overlay actuel pour l'afficher sur le flux vidéo
@@ -131,14 +135,21 @@ function loadOverlayPreview() {
         .then(response => response.json())
         .then(data => {
             const overlayImg = document.getElementById('overlayPreview');
-            if (data.enabled && data.url) {
-                overlayImg.src = data.url;
-                overlayImg.classList.remove('d-none');
-                console.log('Overlay chargé:', data.overlay);
-            } else {
-                overlayImg.classList.add('d-none');
-                overlayImg.src = '';
-                console.log('Overlay désactivé');
+            const newUrl = data.enabled && data.url ? data.url : '';
+            
+            // Ne mettre à jour que si l'overlay a changé
+            if (newUrl !== currentOverlayUrl) {
+                currentOverlayUrl = newUrl;
+                
+                if (data.enabled && data.url) {
+                    overlayImg.src = data.url + '?t=' + Date.now(); // Cache-bust
+                    overlayImg.classList.remove('d-none');
+                    console.log('Overlay chargé:', data.overlay);
+                } else {
+                    overlayImg.classList.add('d-none');
+                    overlayImg.src = '';
+                    console.log('Overlay désactivé');
+                }
             }
         })
         .catch(error => {

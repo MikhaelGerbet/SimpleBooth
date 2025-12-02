@@ -386,11 +386,20 @@
                 </div>
                 
                 <!-- Overlay actuel -->
-                <div class="row mt-4" id="current_overlay_section" style="display: none;">
+                <div class="row mt-4" id="current_overlay_section">
                     <div class="col-md-12">
-                        <div class="alert alert-success">
-                            <i class="fas fa-check-circle me-2"></i>
-                            <strong>Overlay actif :</strong> <span id="current_overlay_name"></span>
+                        <div class="alert alert-success d-flex justify-content-between align-items-center" id="current_overlay_alert" style="display: none;">
+                            <div>
+                                <i class="fas fa-check-circle me-2"></i>
+                                <strong>Overlay actif :</strong> <span id="current_overlay_name"></span>
+                            </div>
+                            <button type="button" class="btn btn-outline-danger btn-sm" onclick="deselectOverlay()">
+                                <i class="fas fa-times me-1"></i>Désactiver
+                            </button>
+                        </div>
+                        <div class="alert alert-secondary" id="no_overlay_alert" style="display: none;">
+                            <i class="fas fa-info-circle me-2"></i>
+                            Aucun overlay actif. Sélectionnez un overlay dans la galerie ci-dessus.
                         </div>
                     </div>
                 </div>
@@ -1357,20 +1366,28 @@ function renderOverlaysGallery(overlays, currentOverlay, enabled) {
 }
 
 function updateCurrentOverlaySection(current, enabled) {
-    const section = document.getElementById('current_overlay_section');
+    const currentAlert = document.getElementById('current_overlay_alert');
+    const noOverlayAlert = document.getElementById('no_overlay_alert');
     const nameSpan = document.getElementById('current_overlay_name');
+    const checkbox = document.getElementById('overlay_enabled');
+    
+    // Mettre à jour le checkbox
+    if (checkbox) {
+        checkbox.checked = enabled;
+    }
     
     if (current && enabled) {
-        section.style.display = 'block';
+        currentAlert.style.display = 'flex';
+        noOverlayAlert.style.display = 'none';
         nameSpan.textContent = current;
     } else {
-        section.style.display = 'none';
+        currentAlert.style.display = 'none';
+        noOverlayAlert.style.display = 'block';
     }
 }
 
 function selectOverlay(filename) {
-    const enabled = document.getElementById('overlay_enabled').checked;
-    
+    // Toujours activer quand on sélectionne un overlay
     fetch('/api/overlay/select', {
         method: 'POST',
         headers: {
@@ -1378,7 +1395,7 @@ function selectOverlay(filename) {
         },
         body: JSON.stringify({
             filename: filename,
-            enabled: enabled
+            enabled: true  // Toujours activer lors de la sélection
         })
     })
     .then(response => response.json())
@@ -1393,6 +1410,32 @@ function selectOverlay(filename) {
     .catch(error => {
         console.error('Erreur:', error);
         showToast('Erreur lors de la sélection', 'danger');
+    });
+}
+
+function deselectOverlay() {
+    fetch('/api/overlay/select', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            filename: '',
+            enabled: false
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            loadOverlays(); // Recharger la galerie
+            showToast('Overlay désactivé', 'success');
+        } else {
+            showToast('Erreur: ' + data.error, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Erreur:', error);
+        showToast('Erreur lors de la désactivation', 'danger');
     });
 }
 
@@ -1502,13 +1545,32 @@ document.addEventListener('DOMContentLoaded', function() {
         uploadBtn.addEventListener('click', uploadOverlay);
     }
     
-    // Gérer le changement de l'activation overlay
+    // Gérer le changement de l'activation overlay via le checkbox
     const overlayEnabledCheckbox = document.getElementById('overlay_enabled');
     if (overlayEnabledCheckbox) {
         overlayEnabledCheckbox.addEventListener('change', function() {
-            if (currentOverlay) {
-                selectOverlay(currentOverlay);
-            }
+            const enabled = this.checked;
+            // Envoyer le changement d'état
+            fetch('/api/overlay/select', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    filename: currentOverlay || '',
+                    enabled: enabled
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    loadOverlays();
+                    showToast(enabled ? 'Overlay activé' : 'Overlay désactivé', 'success');
+                }
+            })
+            .catch(error => {
+                console.error('Erreur:', error);
+            });
         });
     }
 });
