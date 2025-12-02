@@ -323,6 +323,80 @@
             </div>
         </div>
         
+        <!-- Configuration Overlays -->
+        <div class="card mb-4">
+            <div class="card-header bg-success text-white">
+                <h3 class="mb-0"><i class="fas fa-layer-group me-2"></i>Configuration Overlays</h3>
+            </div>
+            <div class="card-body">
+                <!-- Activation overlay -->
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-toggle-on me-2 text-success"></i>Activation des overlays
+                            </label>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" 
+                                       type="checkbox" 
+                                       id="overlay_enabled" 
+                                       name="overlay_enabled"
+                                       {{ 'checked' if config.overlay_enabled else '' }}>
+                                <label class="form-check-label" for="overlay_enabled">
+                                    Activer l'overlay sur les photos
+                                </label>
+                            </div>
+                            <div class="form-text">L'overlay sera appliqué après les effets IA ou sur la photo originale</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Upload nouvel overlay -->
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-upload me-2 text-success"></i>Ajouter un overlay
+                        </label>
+                        <div class="input-group">
+                            <input type="file" 
+                                   class="form-control" 
+                                   id="overlay_file" 
+                                   accept=".png,.webp">
+                            <button class="btn btn-success" type="button" id="upload_overlay_btn">
+                                <i class="fas fa-cloud-upload-alt me-1"></i> Uploader
+                            </button>
+                        </div>
+                        <div class="form-text">Format recommandé : PNG avec transparence (dimensions : 2400x1600 pour meilleure qualité)</div>
+                    </div>
+                </div>
+                
+                <!-- Galerie des overlays -->
+                <div class="row">
+                    <div class="col-md-12">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-images me-2 text-success"></i>Overlays disponibles
+                        </label>
+                        <div id="overlays_gallery" class="row g-3">
+                            <!-- Les overlays seront chargés ici via JavaScript -->
+                            <div class="col-12 text-center text-muted py-4">
+                                <i class="fas fa-spinner fa-spin me-2"></i>Chargement des overlays...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Overlay actuel -->
+                <div class="row mt-4" id="current_overlay_section" style="display: none;">
+                    <div class="col-md-12">
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle me-2"></i>
+                            <strong>Overlay actif :</strong> <span id="current_overlay_name"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <!-- Configuration Telegram -->
         <div class="card mb-4">
             <div class="card-header bg-info text-white">
@@ -1196,5 +1270,247 @@ function updatePrinterStatus(data) {
         </div>
     `;
 }
+
+// ============================================
+// GESTION DES OVERLAYS
+// ============================================
+
+let currentOverlay = '';
+
+function loadOverlays() {
+    fetch('/api/overlays')
+        .then(response => response.json())
+        .then(data => {
+            currentOverlay = data.current;
+            renderOverlaysGallery(data.overlays, data.current, data.enabled);
+            updateCurrentOverlaySection(data.current, data.enabled);
+        })
+        .catch(error => {
+            console.error('Erreur lors du chargement des overlays:', error);
+            document.getElementById('overlays_gallery').innerHTML = `
+                <div class="col-12 text-center text-danger py-4">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Erreur lors du chargement des overlays
+                </div>
+            `;
+        });
+}
+
+function renderOverlaysGallery(overlays, currentOverlay, enabled) {
+    const gallery = document.getElementById('overlays_gallery');
+    
+    if (!overlays || overlays.length === 0) {
+        gallery.innerHTML = `
+            <div class="col-12 text-center text-muted py-4">
+                <i class="fas fa-image me-2"></i>Aucun overlay disponible. Uploadez un fichier PNG avec transparence.
+            </div>
+        `;
+        return;
+    }
+    
+    gallery.innerHTML = overlays.map(overlay => `
+        <div class="col-md-3 col-sm-4 col-6">
+            <div class="card overlay-card ${overlay.filename === currentOverlay ? 'border-success border-3' : ''}" 
+                 data-filename="${overlay.filename}">
+                <div class="overlay-preview position-relative" style="background: repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 50% / 20px 20px;">
+                    <img src="${overlay.url}" class="card-img-top" alt="${overlay.filename}" style="max-height: 150px; object-fit: contain;">
+                    ${overlay.filename === currentOverlay ? `
+                        <div class="position-absolute top-0 end-0 m-1">
+                            <span class="badge bg-success"><i class="fas fa-check"></i> Actif</span>
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="card-body p-2 text-center">
+                    <small class="text-truncate d-block" title="${overlay.filename}">${overlay.filename}</small>
+                    <div class="btn-group btn-group-sm mt-2" role="group">
+                        <button class="btn btn-outline-success select-overlay-btn" 
+                                data-filename="${overlay.filename}"
+                                title="Sélectionner cet overlay">
+                            <i class="fas fa-check"></i>
+                        </button>
+                        <button class="btn btn-outline-danger delete-overlay-btn" 
+                                data-filename="${overlay.filename}"
+                                title="Supprimer cet overlay">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+    
+    // Ajouter les événements
+    document.querySelectorAll('.select-overlay-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const filename = this.dataset.filename;
+            selectOverlay(filename);
+        });
+    });
+    
+    document.querySelectorAll('.delete-overlay-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const filename = this.dataset.filename;
+            if (confirm(`Supprimer l'overlay "${filename}" ?`)) {
+                deleteOverlay(filename);
+            }
+        });
+    });
+}
+
+function updateCurrentOverlaySection(current, enabled) {
+    const section = document.getElementById('current_overlay_section');
+    const nameSpan = document.getElementById('current_overlay_name');
+    
+    if (current && enabled) {
+        section.style.display = 'block';
+        nameSpan.textContent = current;
+    } else {
+        section.style.display = 'none';
+    }
+}
+
+function selectOverlay(filename) {
+    const enabled = document.getElementById('overlay_enabled').checked;
+    
+    fetch('/api/overlay/select', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            filename: filename,
+            enabled: enabled
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            loadOverlays(); // Recharger la galerie
+            showToast('Overlay sélectionné avec succès!', 'success');
+        } else {
+            showToast('Erreur: ' + data.error, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Erreur:', error);
+        showToast('Erreur lors de la sélection', 'danger');
+    });
+}
+
+function deleteOverlay(filename) {
+    fetch(`/api/overlay/delete/${encodeURIComponent(filename)}`, {
+        method: 'DELETE'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            loadOverlays(); // Recharger la galerie
+            showToast('Overlay supprimé avec succès!', 'success');
+        } else {
+            showToast('Erreur: ' + data.error, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Erreur:', error);
+        showToast('Erreur lors de la suppression', 'danger');
+    });
+}
+
+function uploadOverlay() {
+    const fileInput = document.getElementById('overlay_file');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        showToast('Veuillez sélectionner un fichier', 'warning');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('overlay', file);
+    
+    const uploadBtn = document.getElementById('upload_overlay_btn');
+    uploadBtn.disabled = true;
+    uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Upload...';
+    
+    fetch('/api/overlay/upload', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            loadOverlays(); // Recharger la galerie
+            fileInput.value = ''; // Réinitialiser le champ fichier
+            showToast('Overlay uploadé avec succès!', 'success');
+        } else {
+            showToast('Erreur: ' + data.error, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Erreur:', error);
+        showToast('Erreur lors de l\'upload', 'danger');
+    })
+    .finally(() => {
+        uploadBtn.disabled = false;
+        uploadBtn.innerHTML = '<i class="fas fa-cloud-upload-alt me-1"></i> Uploader';
+    });
+}
+
+function showToast(message, type) {
+    // Créer un toast temporaire
+    const toastContainer = document.querySelector('.toast-container') || createToastContainer();
+    
+    const toastId = 'toast-' + Date.now();
+    const toastHtml = `
+        <div id="${toastId}" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header bg-${type} text-white">
+                <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'danger' ? 'exclamation-circle' : 'info-circle'} me-2"></i>
+                <strong class="me-auto">${type === 'success' ? 'Succès' : type === 'danger' ? 'Erreur' : 'Info'}</strong>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Fermer"></button>
+            </div>
+            <div class="toast-body">
+                ${message}
+            </div>
+        </div>
+    `;
+    
+    toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+    const toastElement = document.getElementById(toastId);
+    const toast = new bootstrap.Toast(toastElement);
+    toast.show();
+    
+    // Supprimer le toast après disparition
+    toastElement.addEventListener('hidden.bs.toast', function() {
+        toastElement.remove();
+    });
+}
+
+function createToastContainer() {
+    const container = document.createElement('div');
+    container.className = 'toast-container position-fixed top-0 end-0 p-3';
+    document.body.appendChild(container);
+    return container;
+}
+
+// Initialiser les overlays au chargement
+document.addEventListener('DOMContentLoaded', function() {
+    // Charger les overlays
+    loadOverlays();
+    
+    // Gestionnaire pour le bouton upload
+    const uploadBtn = document.getElementById('upload_overlay_btn');
+    if (uploadBtn) {
+        uploadBtn.addEventListener('click', uploadOverlay);
+    }
+    
+    // Gérer le changement de l'activation overlay
+    const overlayEnabledCheckbox = document.getElementById('overlay_enabled');
+    if (overlayEnabledCheckbox) {
+        overlayEnabledCheckbox.addEventListener('change', function() {
+            if (currentOverlay) {
+                selectOverlay(currentOverlay);
+            }
+        });
+    }
+});
 </script>
 {% endblock %}

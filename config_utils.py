@@ -4,6 +4,7 @@ import logging
 
 PHOTOS_FOLDER = 'photos'
 EFFECT_FOLDER = 'effet'
+OVERLAYS_FOLDER = 'overlays'
 CONFIG_FILE = 'config.json'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
@@ -18,6 +19,8 @@ DEFAULT_CONFIG = {
     'effect_prompt': 'Transform this photo into a beautiful ghibli style anime illustration',
     'effect_steps': 5,
     'runware_api_key': '',
+    'overlay_enabled': False,
+    'current_overlay': '',
     'telegram_enabled': False,
     'telegram_bot_token': '',
     'telegram_chat_id': '',
@@ -36,13 +39,15 @@ DEFAULT_CONFIG = {
 logger = logging.getLogger(__name__)
 
 def ensure_directories():
-    """Create photos and effect folders if missing"""
+    """Create photos, effect and overlays folders if missing"""
     logger.info(f"[DEBUG] Création du dossier photos: {PHOTOS_FOLDER}")
     os.makedirs(PHOTOS_FOLDER, exist_ok=True)
     logger.info(f"[DEBUG] Création du dossier effet: {EFFECT_FOLDER}")
     os.makedirs(EFFECT_FOLDER, exist_ok=True)
+    logger.info(f"[DEBUG] Création du dossier overlays: {OVERLAYS_FOLDER}")
+    os.makedirs(OVERLAYS_FOLDER, exist_ok=True)
     logger.info(
-        f"[DEBUG] Dossiers créés - Photos: {os.path.exists(PHOTOS_FOLDER)}, Effet: {os.path.exists(EFFECT_FOLDER)}"
+        f"[DEBUG] Dossiers créés - Photos: {os.path.exists(PHOTOS_FOLDER)}, Effet: {os.path.exists(EFFECT_FOLDER)}, Overlays: {os.path.exists(OVERLAYS_FOLDER)}"
     )
 
 def load_config():

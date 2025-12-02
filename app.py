@@ -14,10 +14,13 @@ import atexit
 import base64
 import sys
 from datetime import datetime
+from werkzeug.utils import secure_filename
+from PIL import Image
 from runware import Runware, IImageInference
 from config_utils import (
     PHOTOS_FOLDER,
     EFFECT_FOLDER,
+    OVERLAYS_FOLDER,
     load_config,
     save_config,
     ensure_directories,
@@ -500,6 +503,11 @@ async def apply_effect_runware(photo_path):
                     f.write(response.content)
                 logger.info("[DEBUG IA] Image sauvegardée avec succès")
                 
+                # Appliquer l'overlay si activé
+                if config.get('overlay_enabled', False) and config.get('current_overlay', ''):
+                    logger.info("[DEBUG IA] Application de l'overlay sur l'effet...")
+                    apply_overlay(effect_path)
+                
                 # Mettre à jour la photo actuelle
                 current_photo = effect_filename
                 logger.info(f"[DEBUG IA] Photo actuelle mise à jour: {current_photo}")
@@ -525,6 +533,276 @@ async def apply_effect_runware(photo_path):
     except Exception as e:
         logger.info(f"Erreur lors de l'application de l'effet: {e}")
         return jsonify({'success': False, 'error': f'Erreur IA: {str(e)}'})
+
+
+# ============================================
+# GESTION DES OVERLAYS
+# ============================================
+
+def apply_overlay(photo_path, output_path=None):
+    """
+    Appliquer l'overlay actuel sur une photo.
+    L'overlay est redimensionné pour correspondre à la taille de la photo.
+    
+    Args:
+        photo_path: Chemin de la photo source
+        output_path: Chemin de sortie (si None, écrase la photo source)
+    
+    Returns:
+        Chemin de la photo avec overlay, ou None si échec
+    """
+    if not config.get('overlay_enabled', False):
+        return photo_path
+    
+    current_overlay = config.get('current_overlay', '')
+    if not current_overlay:
+        return photo_path
+    
+    overlay_path = os.path.join(OVERLAYS_FOLDER, current_overlay)
+    if not os.path.exists(overlay_path):
+        logger.warning(f"[OVERLAY] Overlay introuvable: {overlay_path}")
+        return photo_path
+    
+    try:
+        # Ouvrir la photo et l'overlay
+        photo = Image.open(photo_path).convert('RGBA')
+        overlay = Image.open(overlay_path).convert('RGBA')
+        
+        # Redimensionner l'overlay pour correspondre à la taille de la photo
+        overlay_resized = overlay.resize(photo.size, Image.Resampling.LANCZOS)
+        
+        # Superposer l'overlay sur la photo
+        photo_with_overlay = Image.alpha_composite(photo, overlay_resized)
+        
+        # Convertir en RGB pour sauvegarder en JPEG
+        photo_with_overlay_rgb = photo_with_overlay.convert('RGB')
+        
+        # Déterminer le chemin de sortie
+        if output_path is None:
+            output_path = photo_path
+        
+        # Sauvegarder
+        photo_with_overlay_rgb.save(output_path, 'JPEG', quality=95)
+        logger.info(f"[OVERLAY] Overlay appliqué: {current_overlay} sur {photo_path}")
+        
+        return output_path
+        
+    except Exception as e:
+        logger.error(f"[OVERLAY] Erreur lors de l'application de l'overlay: {e}")
+        return photo_path
+
+
+@app.route('/api/overlays')
+def list_overlays():
+    """Lister tous les overlays disponibles"""
+    overlays = []
+    
+    if os.path.exists(OVERLAYS_FOLDER):
+        for filename in os.listdir(OVERLAYS_FOLDER):
+            if filename.lower().endswith(('.png', '.webp')):
+                overlays.append({
+                    'filename': filename,
+                    'url': f'/overlays/{filename}'
+                })
+    
+    overlays.sort(key=lambda x: x['filename'])
+    
+    return jsonify({
+        'overlays': overlays,
+        'current': config.get('current_overlay', ''),
+        'enabled': config.get('overlay_enabled', False)
+    })
+
+
+@app.route('/api/overlay/upload', methods=['POST'])
+def upload_overlay():
+    """Uploader un nouvel overlay (PNG transparent)"""
+    if 'overlay' not in request.files:
+        return jsonify({'success': False, 'error': 'Aucun fichier fourni'})
+    
+    file = request.files['overlay']
+    
+    if file.filename == '':
+        return jsonify({'success': False, 'error': 'Aucun fichier sélectionné'})
+    
+    # Vérifier l'extension
+    allowed_extensions = {'.png', '.webp'}
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in allowed_extensions:
+        return jsonify({'success': False, 'error': 'Format non supporté. Utilisez PNG ou WebP.'})
+    
+    try:
+        # Sécuriser le nom de fichier
+        filename = secure_filename(file.filename)
+        
+        # S'assurer que le dossier existe
+        os.makedirs(OVERLAYS_FOLDER, exist_ok=True)
+        
+        # Sauvegarder le fichier
+        filepath = os.path.join(OVERLAYS_FOLDER, filename)
+        file.save(filepath)
+        
+        # Vérifier que c'est bien une image avec transparence
+        try:
+            img = Image.open(filepath)
+            if img.mode not in ('RGBA', 'LA', 'PA'):
+                # Avertissement mais on garde le fichier
+                logger.warning(f"[OVERLAY] L'image {filename} n'a pas de canal alpha")
+        except Exception as e:
+            # Si ce n'est pas une image valide, supprimer
+            os.remove(filepath)
+            return jsonify({'success': False, 'error': f'Image invalide: {str(e)}'})
+        
+        logger.info(f"[OVERLAY] Overlay uploadé: {filename}")
+        
+        return jsonify({
+            'success': True,
+            'filename': filename,
+            'url': f'/overlays/{filename}'
+        })
+        
+    except Exception as e:
+        logger.error(f"[OVERLAY] Erreur lors de l'upload: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/overlay/select', methods=['POST'])
+def select_overlay():
+    """Sélectionner un overlay comme overlay actif"""
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({'success': False, 'error': 'Données JSON manquantes'})
+    
+    filename = data.get('filename', '')
+    enabled = data.get('enabled', True)
+    
+    # Vérifier que l'overlay existe (sauf si on désactive)
+    if filename and enabled:
+        overlay_path = os.path.join(OVERLAYS_FOLDER, filename)
+        if not os.path.exists(overlay_path):
+            return jsonify({'success': False, 'error': 'Overlay introuvable'})
+    
+    # Mettre à jour la configuration
+    config['current_overlay'] = filename
+    config['overlay_enabled'] = enabled
+    save_config(config)
+    
+    logger.info(f"[OVERLAY] Overlay sélectionné: {filename}, activé: {enabled}")
+    
+    return jsonify({
+        'success': True,
+        'current': filename,
+        'enabled': enabled
+    })
+
+
+@app.route('/api/overlay/delete/<filename>', methods=['DELETE'])
+def delete_overlay(filename):
+    """Supprimer un overlay"""
+    try:
+        # Sécuriser le nom de fichier
+        filename = secure_filename(filename)
+        filepath = os.path.join(OVERLAYS_FOLDER, filename)
+        
+        if not os.path.exists(filepath):
+            return jsonify({'success': False, 'error': 'Overlay introuvable'})
+        
+        os.remove(filepath)
+        
+        # Si c'était l'overlay actif, le désactiver
+        if config.get('current_overlay') == filename:
+            config['current_overlay'] = ''
+            config['overlay_enabled'] = False
+            save_config(config)
+        
+        logger.info(f"[OVERLAY] Overlay supprimé: {filename}")
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        logger.error(f"[OVERLAY] Erreur lors de la suppression: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/overlays/<filename>')
+def serve_overlay(filename):
+    """Servir un fichier overlay"""
+    return send_from_directory(OVERLAYS_FOLDER, filename)
+
+
+@app.route('/api/overlay/current')
+def get_current_overlay():
+    """Récupérer l'overlay actuel (pour le preview)"""
+    if not config.get('overlay_enabled', False):
+        return jsonify({'enabled': False, 'overlay': None})
+    
+    current = config.get('current_overlay', '')
+    if not current:
+        return jsonify({'enabled': False, 'overlay': None})
+    
+    return jsonify({
+        'enabled': True,
+        'overlay': current,
+        'url': f'/overlays/{current}'
+    })
+
+
+@app.route('/api/overlay/apply', methods=['POST'])
+def apply_overlay_to_current_photo():
+    """
+    Appliquer l'overlay à la photo actuelle (sans effet IA).
+    Crée une copie avec overlay dans le dossier effet.
+    """
+    global current_photo
+    
+    if not current_photo:
+        return jsonify({'success': False, 'error': 'Aucune photo à traiter'})
+    
+    if not config.get('overlay_enabled', False):
+        return jsonify({'success': False, 'error': 'Overlay désactivé'})
+    
+    if not config.get('current_overlay', ''):
+        return jsonify({'success': False, 'error': 'Aucun overlay sélectionné'})
+    
+    try:
+        # Chercher la photo source
+        source_path = None
+        if os.path.exists(os.path.join(PHOTOS_FOLDER, current_photo)):
+            source_path = os.path.join(PHOTOS_FOLDER, current_photo)
+        elif os.path.exists(os.path.join(EFFECT_FOLDER, current_photo)):
+            source_path = os.path.join(EFFECT_FOLDER, current_photo)
+        
+        if not source_path:
+            return jsonify({'success': False, 'error': 'Photo introuvable'})
+        
+        # Créer un nouveau fichier avec overlay
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        overlay_filename = f'overlay_{timestamp}.jpg'
+        overlay_path = os.path.join(EFFECT_FOLDER, overlay_filename)
+        
+        # S'assurer que le dossier existe
+        os.makedirs(EFFECT_FOLDER, exist_ok=True)
+        
+        # Appliquer l'overlay
+        result = apply_overlay(source_path, overlay_path)
+        
+        if result and os.path.exists(overlay_path):
+            current_photo = overlay_filename
+            logger.info(f"[OVERLAY] Photo avec overlay créée: {overlay_filename}")
+            
+            return jsonify({
+                'success': True,
+                'message': 'Overlay appliqué avec succès!',
+                'new_filename': overlay_filename
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Échec de l\'application de l\'overlay'})
+            
+    except Exception as e:
+        logger.error(f"[OVERLAY] Erreur: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
 
 @app.route('/admin')
 def admin():
@@ -626,6 +904,9 @@ def save_admin_config():
         config['effect_steps'] = int(effect_steps) if effect_steps else 5
         
         config['runware_api_key'] = request.form.get('runware_api_key', '')
+        
+        # Configuration overlay
+        config['overlay_enabled'] = 'overlay_enabled' in request.form
         
         config['telegram_enabled'] = 'telegram_enabled' in request.form
         config['telegram_bot_token'] = request.form.get('telegram_bot_token', '')
