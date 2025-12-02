@@ -727,9 +727,20 @@ def generate_video_stream():
         # Utiliser la Pi Camera par défaut
         else:
             logger.info("[CAMERA] Démarrage de la Pi Camera...")
-            # Commande libcamera-vid pour flux MJPEG - résolution 16/9
+            # Détecter si rpicam-vid ou libcamera-vid est disponible (Pi 5 vs Pi 4)
+            import shutil
+            if shutil.which('rpicam-vid'):
+                camera_cmd = 'rpicam-vid'
+                logger.info("[CAMERA] Utilisation de rpicam-vid (Raspberry Pi 5 / Bookworm)")
+            elif shutil.which('libcamera-vid'):
+                camera_cmd = 'libcamera-vid'
+                logger.info("[CAMERA] Utilisation de libcamera-vid (Raspberry Pi 4 / Bullseye)")
+            else:
+                raise Exception("Aucune commande caméra trouvée (rpicam-vid ou libcamera-vid)")
+            
+            # Commande pour flux MJPEG - résolution 16/9
             cmd = [
-                'libcamera-vid',
+                camera_cmd,
                 '--codec', 'mjpeg',
                 '--width', '1280',   # Résolution native plus compatible
                 '--height', '720',   # Vrai 16/9 sans bandes noires
