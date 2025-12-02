@@ -5,6 +5,7 @@
 ![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
 ![Flask](https://img.shields.io/badge/Flask-2.3.3-green.svg)
 ![Raspberry Pi](https://img.shields.io/badge/Raspberry%20Pi%204%2F5-Compatible-red.svg)
+![Cloudflare AI](https://img.shields.io/badge/Cloudflare%20AI-Gratuit-orange.svg)
 ![Runware](https://img.shields.io/badge/Runware%20AI-Intégré-purple.svg)
 ![Telegram](https://img.shields.io/badge/Telegram-Bot-blue.svg)
 ![OpenCV](https://img.shields.io/badge/OpenCV-Support%20USB-brightgreen.svg)
@@ -19,7 +20,7 @@ Cette application transforme votre Raspberry Pi en un WizardPhotoBox professionn
 - **Compatible Raspberry Pi 4 et 5** (détection automatique rpicam-vid/libcamera-vid)
 - **Interface tactile optimisée** pour écran 7 pouces
 - **Capture photo instantanée** directement depuis le flux vidéo
-- **Effets IA** via l'API Runware pour transformer vos photos
+- **Effets IA** via **Cloudflare AI** (gratuit) ou **Runware** pour transformer vos photos
 - **Diaporama automatique** configurable après période d'inactivité
 - **Bot Telegram** pour envoi automatique des photos sur un groupe/canal
 - **Impression photo couleur** via Canon SELPHY CP1500 (CUPS)
@@ -285,6 +286,9 @@ La configuration est sauvegardée dans `config.json` :
 | `effect_enabled` | Activer les effets IA | false |
 | `effect_prompt` | Description de l'effet | "Transform..." |
 | `effect_steps` | Étapes de génération (1-50) | 5 |
+| `ai_provider` | Fournisseur IA (cloudflare/runware) | "cloudflare" |
+| `cloudflare_account_id` | Account ID Cloudflare | "" |
+| `cloudflare_api_token` | Token API Cloudflare | "" |
 | `runware_api_key` | Clé API Runware | "" |
 
 ### Telegram
@@ -295,7 +299,66 @@ La configuration est sauvegardée dans `config.json` :
 | `telegram_chat_id` | ID du chat/groupe | "" |
 | `telegram_send_type` | Photos à envoyer | "photos" |
 
-## 🤖 Configuration Telegram
+## 🤖 Configuration des Effets IA
+
+SimpleBooth supporte deux fournisseurs pour les effets IA :
+
+### ☁️ Cloudflare Workers AI (Gratuit - Recommandé)
+
+**Avantages :**
+- ✅ **Gratuit** : 10 000 images/jour incluses
+- ✅ Pas de carte bancaire requise
+- ✅ Modèle Stable Diffusion XL
+
+**Configuration :**
+
+1. **Créer un compte Cloudflare** :
+   - Allez sur [dash.cloudflare.com/sign-up](https://dash.cloudflare.com/sign-up)
+   - Créez un compte gratuit (email + mot de passe)
+   - Vérifiez votre email
+
+2. **Activer Workers AI** :
+   - Dans le dashboard, cliquez sur **Workers & Pages** dans le menu gauche
+   - Cliquez sur **Overview**
+   - Cloudflare active automatiquement le tier gratuit Workers AI
+
+3. **Récupérer l'Account ID** :
+   - Dashboard → **Workers & Pages**
+   - L'**Account ID** est affiché à droite de la page (32 caractères)
+   - Exemple : `a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6`
+
+4. **Créer un API Token** :
+   - Dashboard → **My Profile** (icône en haut à droite) → **API Tokens**
+   - Cliquez sur **Create Token**
+   - Utilisez le template **Edit Cloudflare Workers** ou créez un custom :
+     - Permissions : `Account` → `Workers AI` → `Edit`
+   - Cliquez sur **Continue to Summary** → **Create Token**
+   - **Copiez le token** (affiché une seule fois !)
+
+5. **Configurer dans SimpleBooth** :
+   - Accédez à `/admin`
+   - Section **Effets IA** :
+     - Fournisseur : **Cloudflare AI (Gratuit)**
+     - Account ID : Collez votre Account ID
+     - API Token : Collez votre token
+   - Sauvegardez
+
+### 🚀 Runware (Payant - Haute qualité)
+
+**Avantages :**
+- Qualité supérieure
+- Plus de modèles disponibles
+- Contrôle avancé (strength, guidance scale)
+
+**Configuration :**
+
+1. **Créer un compte** sur [runware.ai](https://runware.ai)
+2. **Obtenir une clé API** dans le dashboard
+3. **Configurer dans SimpleBooth** :
+   - Fournisseur : **Runware (Payant)**
+   - Clé API : Votre clé Runware
+
+## 📱 Configuration Telegram
 
 1. **Créer un bot** via [@BotFather](https://t.me/BotFather)
 2. **Obtenir l'ID du chat** :

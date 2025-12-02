@@ -343,8 +343,17 @@ def apply_effect():
     if not config.get('effect_enabled', False):
         return jsonify({'success': False, 'error': 'Les effets sont désactivés'})
     
-    if not config.get('runware_api_key'):
+    # Vérifier la configuration selon le provider
+    ai_provider = config.get('ai_provider', 'cloudflare')
+    
+    if ai_provider == 'runware' and not config.get('runware_api_key'):
         return jsonify({'success': False, 'error': 'Clé API Runware manquante'})
+    
+    if ai_provider == 'cloudflare':
+        if not config.get('cloudflare_account_id'):
+            return jsonify({'success': False, 'error': 'Account ID Cloudflare manquant'})
+        if not config.get('cloudflare_api_token'):
+            return jsonify({'success': False, 'error': 'API Token Cloudflare manquant'})
     
     try:
         # Chemin de la photo actuelle
@@ -353,16 +362,189 @@ def apply_effect():
         if not os.path.exists(photo_path):
             return jsonify({'success': False, 'error': 'Photo introuvable'})
         
-        # Exécuter la fonction asynchrone
-        result = asyncio.run(apply_effect_async(photo_path))
+        # Choisir le provider IA
+        if ai_provider == 'cloudflare':
+            result = apply_effect_cloudflare(photo_path)
+        else:
+            result = asyncio.run(apply_effect_runware(photo_path))
+        
         return result
             
     except Exception as e:
         logger.info(f"Erreur lors de l'application de l'effet: {e}")
         return jsonify({'success': False, 'error': f'Erreur IA: {str(e)}'})
 
-async def apply_effect_async(photo_path):
-    """Fonction asynchrone pour appliquer l'effet IA"""
+
+def apply_effect_cloudflare(photo_path):
+    """Appliquer un effet IA via Cloudflare Workers AI"""
+    global current_photo
+    
+    try:
+        import requests
+        
+        logger.info("[CLOUDFLARE AI] Début de l'application de l'effet")
+        logger.info(f"[CLOUDFLARE AI] Photo source: {photo_path}")
+        
+        account_id = config.get('cloudflare_account_id')
+        api_token = config.get('cloudflare_api_token')
+        prompt = config.get('effect_prompt', 'Transform this photo into a beautiful ghibli style anime illustration')
+        
+        # Lire et encoder l'image en base64
+        logger.info("[CLOUDFLARE AI] Lecture et encodage de l'image...")
+        with open(photo_path, 'rb') as img_file:
+            img_data = img_file.read()
+            img_base64 = base64.b64encode(img_data).decode('utf-8')
+        
+        # API Cloudflare Workers AI - Image-to-Image avec Stable Diffusion
+        url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/@cf/stabilityai/stable-diffusion-xl-base-1.0"
+        
+        headers = {
+            "Authorization": f"Bearer {api_token}",
+            "Content-Type": "application/json"
+        }
+        
+        # Payload pour génération d'image
+        payload = {
+            "prompt": prompt,
+            "image": img_base64,
+            "strength": 0.75,  # Force de transformation (0.0 = original, 1.0 = complètement nouveau)
+            "num_steps": config.get('effect_steps', 20),
+            "guidance": 7.5
+        }
+        
+        logger.info(f"[CLOUDFLARE AI] Envoi de la requête...")
+        logger.info(f"[CLOUDFLARE AI] Prompt: {prompt}")
+        
+        response = requests.post(url, headers=headers, json=payload, timeout=120)
+        
+        logger.info(f"[CLOUDFLARE AI] Statut réponse: {response.status_code}")
+        
+        if response.status_code == 200:
+            result = response.json()
+            
+            if result.get('success') and result.get('result'):
+                # L'image est retournée en base64
+                image_base64 = result['result'].get('image')
+                
+                if image_base64:
+                    # Décoder et sauvegarder l'image
+                    image_data = base64.b64decode(image_base64)
+                    
+                    # S'assurer que le dossier effet existe
+                    os.makedirs(EFFECT_FOLDER, exist_ok=True)
+                    
+                    # Créer un nouveau nom de fichier
+                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    effect_filename = f'effect_{timestamp}.jpg'
+                    effect_path = os.path.join(EFFECT_FOLDER, effect_filename)
+                    
+                    with open(effect_path, 'wb') as f:
+                        f.write(image_data)
+                    
+                    logger.info(f"[CLOUDFLARE AI] Image sauvegardée: {effect_path}")
+                    
+                    # Mettre à jour la photo actuelle
+                    current_photo = effect_filename
+                    
+                    # Envoyer sur Telegram si activé
+                    send_type = config.get('telegram_send_type', 'photos')
+                    if send_type in ['effet', 'both']:
+                        threading.Thread(target=send_to_telegram, args=(effect_path, config, "effet")).start()
+                    
+                    return jsonify({
+                        'success': True,
+                        'message': 'Effet appliqué avec succès!',
+                        'new_filename': effect_filename
+                    })
+            
+            # Si pas d'image, essayer le modèle text-to-image comme fallback
+            logger.info("[CLOUDFLARE AI] Tentative avec modèle text-to-image...")
+            return apply_effect_cloudflare_text2img(photo_path, prompt)
+            
+        else:
+            error_msg = response.json().get('errors', [{'message': 'Erreur inconnue'}])
+            logger.info(f"[CLOUDFLARE AI] Erreur: {error_msg}")
+            return jsonify({'success': False, 'error': f'Erreur Cloudflare: {error_msg}'})
+            
+    except Exception as e:
+        logger.info(f"[CLOUDFLARE AI] Exception: {e}")
+        return jsonify({'success': False, 'error': f'Erreur Cloudflare: {str(e)}'})
+
+
+def apply_effect_cloudflare_text2img(photo_path, base_prompt):
+    """Fallback: Génération text-to-image inspirée de la photo"""
+    global current_photo
+    
+    try:
+        import requests
+        from PIL import Image
+        
+        account_id = config.get('cloudflare_account_id')
+        api_token = config.get('cloudflare_api_token')
+        
+        # Utiliser le modèle SDXL pour text-to-image
+        url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/@cf/stabilityai/stable-diffusion-xl-base-1.0"
+        
+        headers = {
+            "Authorization": f"Bearer {api_token}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "prompt": base_prompt,
+            "num_steps": config.get('effect_steps', 20),
+            "guidance": 7.5
+        }
+        
+        logger.info(f"[CLOUDFLARE AI] Text2Img - Prompt: {base_prompt}")
+        
+        response = requests.post(url, headers=headers, json=payload, timeout=120)
+        
+        if response.status_code == 200:
+            # La réponse est directement l'image en binaire
+            content_type = response.headers.get('Content-Type', '')
+            
+            if 'image' in content_type or len(response.content) > 1000:
+                # C'est une image binaire
+                image_data = response.content
+                
+                os.makedirs(EFFECT_FOLDER, exist_ok=True)
+                
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                effect_filename = f'effect_{timestamp}.png'
+                effect_path = os.path.join(EFFECT_FOLDER, effect_filename)
+                
+                with open(effect_path, 'wb') as f:
+                    f.write(image_data)
+                
+                logger.info(f"[CLOUDFLARE AI] Image générée: {effect_path}")
+                
+                current_photo = effect_filename
+                
+                # Envoyer sur Telegram si activé
+                send_type = config.get('telegram_send_type', 'photos')
+                if send_type in ['effet', 'both']:
+                    threading.Thread(target=send_to_telegram, args=(effect_path, config, "effet")).start()
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'Effet appliqué avec succès!',
+                    'new_filename': effect_filename
+                })
+            else:
+                result = response.json()
+                logger.info(f"[CLOUDFLARE AI] Réponse JSON: {result}")
+                return jsonify({'success': False, 'error': 'Format de réponse inattendu'})
+        else:
+            return jsonify({'success': False, 'error': f'Erreur Cloudflare: {response.status_code}'})
+            
+    except Exception as e:
+        logger.info(f"[CLOUDFLARE AI] Exception text2img: {e}")
+        return jsonify({'success': False, 'error': f'Erreur: {str(e)}'})
+
+
+async def apply_effect_runware(photo_path):
+    """Fonction asynchrone pour appliquer l'effet IA via Runware"""
     global current_photo
     
     try:
@@ -563,6 +745,12 @@ def save_admin_config():
         config['effect_steps'] = int(effect_steps) if effect_steps else 5
         
         config['runware_api_key'] = request.form.get('runware_api_key', '')
+        
+        # Configuration du fournisseur IA
+        config['ai_provider'] = request.form.get('ai_provider', 'cloudflare')
+        config['cloudflare_account_id'] = request.form.get('cloudflare_account_id', '')
+        config['cloudflare_api_token'] = request.form.get('cloudflare_api_token', '')
+        
         config['telegram_enabled'] = 'telegram_enabled' in request.form
         config['telegram_bot_token'] = request.form.get('telegram_bot_token', '')
         config['telegram_chat_id'] = request.form.get('telegram_chat_id', '')
