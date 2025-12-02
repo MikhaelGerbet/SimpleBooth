@@ -25,6 +25,9 @@ DEFAULT_CONFIG = {
     'camera_type': 'picamera',
     'usb_camera_id': 0,
     'printer_enabled': True,
+    'printer_type': 'cups',
+    'printer_name': '',
+    'paper_size': '4x6',
     'printer_port': '/dev/ttyAMA0',
     'printer_baudrate': 9600,
     'print_resolution': 384

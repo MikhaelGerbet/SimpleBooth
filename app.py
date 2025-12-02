@@ -96,6 +96,24 @@ def check_printer_status():
         }
 
 
+# Fonction pour détecter les imprimantes CUPS disponibles
+def detect_cups_printers():
+    """Détecte les imprimantes CUPS disponibles sur le système"""
+    printers = []
+    try:
+        result = subprocess.run(['lpstat', '-p'], capture_output=True, text=True)
+        if result.returncode == 0:
+            for line in result.stdout.strip().split('\n'):
+                if line.startswith('printer '):
+                    # Format: "printer NAME is idle..."
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        printers.append(parts[1])
+    except Exception as e:
+        logger.info(f"[CUPS] Erreur détection imprimantes: {e}")
+    return printers
+
+
 # Fonction pour détecter les ports série disponibles
 def detect_serial_ports():
     """Détecte les ports série disponibles sur le système"""
@@ -217,43 +235,74 @@ def print_photo():
         else:
             return jsonify({'success': False, 'error': 'Photo introuvable'})
         
-        # Vérifier l'existence du script d'impression
-        script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ScriptPythonPOS.py')
-        if not os.path.exists(script_path):
-            return jsonify({'success': False, 'error': 'Script d\'impression introuvable (ScriptPythonPOS.py)'})
+        # Déterminer le type d'imprimante
+        printer_type = config.get('printer_type', 'thermal')
         
-        # Construire la commande d'impression avec les nouveaux paramètres
-        cmd = ['python3', 'ScriptPythonPOS.py', '--image', photo_path]
-        
-        # Ajouter les paramètres de port et baudrate
-        printer_port = config.get('printer_port', '/dev/ttyAMA0')
-        printer_baudrate = config.get('printer_baudrate', 9600)
-        cmd.extend(['--port', printer_port, '--baudrate', str(printer_baudrate)])
-        
-        # Ajouter le texte de pied de page si configuré
-        footer_text = config.get('footer_text', '')
-        if footer_text:
-            cmd.extend(['--text', footer_text])
-        
-        # Ajouter l'option haute résolution selon la configuration
-        print_resolution = config.get('print_resolution', 384)
-        if print_resolution > 384:
-            cmd.append('--hd')
-        
-        # Exécuter l'impression
-        result = subprocess.run(cmd, capture_output=True, text=True, cwd=os.path.dirname(os.path.abspath(__file__)))
-        
-        if result.returncode == 0:
-            return jsonify({'success': True, 'message': 'Photo imprimée avec succès!'})
-        elif result.returncode == 2:
-            # Code d'erreur spécifique pour manque de papier
-            return jsonify({'success': False, 'error': 'Plus de papier dans l\'imprimante', 'error_type': 'no_paper'})
-        else:
-            error_msg = result.stderr.strip() if result.stderr else 'Erreur inconnue'
-            if 'ModuleNotFoundError' in error_msg and 'escpos' in error_msg:
-                return jsonify({'success': False, 'error': 'Module escpos manquant. Installez-le avec: pip install python-escpos'})
+        if printer_type == 'cups':
+            # Impression via CUPS (Canon SELPHY, etc.)
+            script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'print_cups.py')
+            if not os.path.exists(script_path):
+                return jsonify({'success': False, 'error': 'Script d\'impression CUPS introuvable (print_cups.py)'})
+            
+            cmd = ['python3', script_path, '--image', photo_path, '--quality', 'high']
+            
+            # Ajouter le nom de l'imprimante si configuré
+            printer_name = config.get('printer_name', '')
+            if printer_name:
+                cmd.extend(['--printer', printer_name])
+            
+            # Ajouter le format papier si configuré
+            paper_size = config.get('paper_size', '4x6')
+            cmd.extend(['--paper-size', paper_size])
+            
+            # Exécuter l'impression
+            logger.info(f"[PRINT] Commande CUPS: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True, cwd=os.path.dirname(os.path.abspath(__file__)))
+            
+            if result.returncode == 0:
+                return jsonify({'success': True, 'message': 'Photo envoyée à l\'imprimante!'})
             else:
+                error_msg = result.stderr.strip() if result.stderr else result.stdout.strip()
                 return jsonify({'success': False, 'error': f'Erreur d\'impression: {error_msg}'})
+        
+        else:
+            # Impression thermique ESC/POS (imprimante ticket)
+            script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ScriptPythonPOS.py')
+            if not os.path.exists(script_path):
+                return jsonify({'success': False, 'error': 'Script d\'impression introuvable (ScriptPythonPOS.py)'})
+            
+            # Construire la commande d'impression avec les paramètres thermiques
+            cmd = ['python3', script_path, '--image', photo_path]
+            
+            # Ajouter les paramètres de port et baudrate
+            printer_port = config.get('printer_port', '/dev/ttyAMA0')
+            printer_baudrate = config.get('printer_baudrate', 9600)
+            cmd.extend(['--port', printer_port, '--baudrate', str(printer_baudrate)])
+            
+            # Ajouter le texte de pied de page si configuré
+            footer_text = config.get('footer_text', '')
+            if footer_text:
+                cmd.extend(['--text', footer_text])
+            
+            # Ajouter l'option haute résolution selon la configuration
+            print_resolution = config.get('print_resolution', 384)
+            if print_resolution > 384:
+                cmd.append('--hd')
+            
+            # Exécuter l'impression
+            result = subprocess.run(cmd, capture_output=True, text=True, cwd=os.path.dirname(os.path.abspath(__file__)))
+            
+            if result.returncode == 0:
+                return jsonify({'success': True, 'message': 'Photo imprimée avec succès!'})
+            elif result.returncode == 2:
+                # Code d'erreur spécifique pour manque de papier
+                return jsonify({'success': False, 'error': 'Plus de papier dans l\'imprimante', 'error_type': 'no_paper'})
+            else:
+                error_msg = result.stderr.strip() if result.stderr else 'Erreur inconnue'
+                if 'ModuleNotFoundError' in error_msg and 'escpos' in error_msg:
+                    return jsonify({'success': False, 'error': 'Module escpos manquant. Installez-le avec: pip install python-escpos'})
+                else:
+                    return jsonify({'success': False, 'error': f'Erreur d\'impression: {error_msg}'})
             
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -472,6 +521,9 @@ def admin():
     # Détecter les ports série disponibles
     available_serial_ports = detect_serial_ports()
     
+    # Détecter les imprimantes CUPS disponibles
+    available_cups_printers = detect_cups_printers()
+    
     # Charger la configuration
     config = load_config()
     
@@ -482,6 +534,7 @@ def admin():
                            effect_count=effect_count,
                            available_cameras=available_cameras,
                            available_serial_ports=available_serial_ports,
+                           available_cups_printers=available_cups_printers,
                            show_toast=request.args.get('show_toast', False))
 
 @app.route('/admin/save', methods=['POST'])
@@ -528,6 +581,8 @@ def save_admin_config():
         
         # Configuration de l'imprimante
         config['printer_enabled'] = 'printer_enabled' in request.form
+        config['printer_type'] = request.form.get('printer_type', 'cups')
+        config['printer_name'] = request.form.get('printer_name', '')
         config['printer_port'] = request.form.get('printer_port', '/dev/ttyAMA0')
         
         printer_baudrate = request.form.get('printer_baudrate', '9600').strip()
@@ -535,6 +590,9 @@ def save_admin_config():
             config['printer_baudrate'] = int(printer_baudrate)
         except ValueError:
             config['printer_baudrate'] = 9600
+        
+        # Format papier pour CUPS
+        config['paper_size'] = request.form.get('paper_size', '4x6')
         
         print_resolution = request.form.get('print_resolution', '384').strip()
         try:

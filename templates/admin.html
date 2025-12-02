@@ -426,70 +426,122 @@
                                     <i class="fas fa-power-off me-2 text-success"></i>Activer l'imprimante
                                 </label>
                             </div>
-                            <div class="form-text">Activer ou désactiver l'impression thermique</div>
+                            <div class="form-text">Activer ou désactiver l'impression</div>
                         </div>
                     </div>
                     
                     <div class="col-md-6">
                         <div class="mb-3">
-                            <label for="printer_port" class="form-label fw-bold">
-                                <i class="fas fa-plug me-2 text-info"></i>Port série
+                            <label for="printer_type" class="form-label fw-bold">
+                                <i class="fas fa-cogs me-2 text-primary"></i>Type d'imprimante
                             </label>
-                            <select class="form-select" id="printer_port" name="printer_port">
-                                {% if available_serial_ports %}
-                                    {% for port_value, port_label in available_serial_ports %}
-                                        <option value="{{ port_value }}" {% if config.printer_port == port_value %}selected{% endif %}>{{ port_label }}</option>
-                                    {% endfor %}
-                                {% else %}
-                                    <option value="/dev/ttyAMA0" {% if config.printer_port == '/dev/ttyAMA0' %}selected{% endif %}>/dev/ttyAMA0</option>
-                                    <option value="/dev/ttyS0" {% if config.printer_port == '/dev/ttyS0' %}selected{% endif %}>/dev/ttyS0</option>
-                                    <option value="COM3" {% if config.printer_port == 'COM3' %}selected{% endif %}>COM3</option>
-                                {% endif %}
+                            <select class="form-select" id="printer_type" name="printer_type" onchange="togglePrinterSettings()">
+                                <option value="cups" {% if config.printer_type == 'cups' %}selected{% endif %}>📷 Photo CUPS (Canon SELPHY, etc.)</option>
+                                <option value="thermal" {% if config.printer_type == 'thermal' %}selected{% endif %}>🧾 Thermique ESC/POS (ticket)</option>
                             </select>
-                            <div class="form-text d-flex align-items-center">
-                                <span>Ports série détectés automatiquement</span>
-                                <button type="button" class="btn btn-sm btn-outline-info ms-2" onclick="window.location.reload()">
-                                    <i class="fas fa-sync-alt"></i>
-                                    Actualiser
-                                </button>
+                            <div class="form-text">Choisir le type d'imprimante connectée</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Paramètres CUPS (Canon SELPHY, etc.) -->
+                <div id="cups_printer_settings" class="printer-settings">
+                    <div class="alert alert-info mb-3">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Imprimante CUPS</strong> - Configurez votre imprimante via l'interface CUPS à 
+                        <a href="http://localhost:631" target="_blank" class="alert-link">http://localhost:631</a>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="printer_name" class="form-label fw-bold">
+                                    <i class="fas fa-print me-2 text-info"></i>Nom de l'imprimante CUPS
+                                </label>
+                                <select class="form-select" id="printer_name" name="printer_name">
+                                    <option value="">-- Imprimante par défaut --</option>
+                                    {% if available_cups_printers %}
+                                        {% for printer in available_cups_printers %}
+                                            <option value="{{ printer }}" {% if config.printer_name == printer %}selected{% endif %}>{{ printer }}</option>
+                                        {% endfor %}
+                                    {% endif %}
+                                </select>
+                                <div class="form-text">Laissez vide pour utiliser l'imprimante par défaut du système</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="paper_size" class="form-label fw-bold">
+                                    <i class="fas fa-expand me-2 text-success"></i>Format du papier
+                                </label>
+                                <select class="form-select" id="paper_size" name="paper_size">
+                                    <option value="4x6" {% if config.paper_size == '4x6' %}selected{% endif %}>📷 Carte postale 4x6" (10x15cm)</option>
+                                    <option value="credit-card" {% if config.paper_size == 'credit-card' %}selected{% endif %}>💳 Format carte de crédit</option>
+                                    <option value="square" {% if config.paper_size == 'square' %}selected{% endif %}>⬜ Carré</option>
+                                </select>
+                                <div class="form-text">Format de papier pour Canon SELPHY</div>
                             </div>
                         </div>
                     </div>
                 </div>
                 
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="printer_baudrate" class="form-label fw-bold">
-                                <i class="fas fa-tachometer-alt me-2 text-warning"></i>Vitesse (Baudrate)
-                            </label>
-                            <select class="form-select" id="printer_baudrate" name="printer_baudrate">
-                                <option value="9600" {% if config.printer_baudrate == 9600 %}selected{% endif %}>9600</option>
-                                <option value="19200" {% if config.printer_baudrate == 19200 %}selected{% endif %}>19200</option>
-                                <option value="38400" {% if config.printer_baudrate == 38400 %}selected{% endif %}>38400</option>
-                                <option value="57600" {% if config.printer_baudrate == 57600 %}selected{% endif %}>57600</option>
-                                <option value="115200" {% if config.printer_baudrate == 115200 %}selected{% endif %}>115200</option>
-                            </select>
-                            <div class="form-text">Vitesse de communication avec l'imprimante</div>
+                <!-- Paramètres thermique ESC/POS -->
+                <div id="thermal_printer_settings" class="printer-settings" style="display: none;">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="printer_port" class="form-label fw-bold">
+                                    <i class="fas fa-plug me-2 text-info"></i>Port série
+                                </label>
+                                <select class="form-select" id="printer_port" name="printer_port">
+                                    {% if available_serial_ports %}
+                                        {% for port_value, port_label in available_serial_ports %}
+                                            <option value="{{ port_value }}" {% if config.printer_port == port_value %}selected{% endif %}>{{ port_label }}</option>
+                                        {% endfor %}
+                                    {% else %}
+                                        <option value="/dev/ttyAMA0" {% if config.printer_port == '/dev/ttyAMA0' %}selected{% endif %}>/dev/ttyAMA0</option>
+                                        <option value="/dev/ttyS0" {% if config.printer_port == '/dev/ttyS0' %}selected{% endif %}>/dev/ttyS0</option>
+                                        <option value="COM3" {% if config.printer_port == 'COM3' %}selected{% endif %}>COM3</option>
+                                    {% endif %}
+                                </select>
+                                <div class="form-text">Port série de l'imprimante thermique</div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="printer_baudrate" class="form-label fw-bold">
+                                    <i class="fas fa-tachometer-alt me-2 text-warning"></i>Vitesse (Baudrate)
+                                </label>
+                                <select class="form-select" id="printer_baudrate" name="printer_baudrate">
+                                    <option value="9600" {% if config.printer_baudrate == 9600 %}selected{% endif %}>9600</option>
+                                    <option value="19200" {% if config.printer_baudrate == 19200 %}selected{% endif %}>19200</option>
+                                    <option value="38400" {% if config.printer_baudrate == 38400 %}selected{% endif %}>38400</option>
+                                    <option value="57600" {% if config.printer_baudrate == 57600 %}selected{% endif %}>57600</option>
+                                    <option value="115200" {% if config.printer_baudrate == 115200 %}selected{% endif %}>115200</option>
+                                </select>
+                                <div class="form-text">Vitesse de communication</div>
+                            </div>
                         </div>
                     </div>
                     
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="print_resolution" class="form-label fw-bold">
-                                <i class="fas fa-expand-arrows-alt me-2 text-primary"></i>Résolution
-                            </label>
-                            <select class="form-select" id="print_resolution" name="print_resolution">
-                                <option value="384" {% if config.print_resolution == 384 %}selected{% endif %}>384 pixels (Standard)</option>
-                                <option value="576" {% if config.print_resolution == 576 %}selected{% endif %}>576 pixels (Haute définition)</option>
-                            </select>
-                            <div class="form-text">Résolution d'impression des photos</div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="print_resolution" class="form-label fw-bold">
+                                    <i class="fas fa-expand-arrows-alt me-2 text-primary"></i>Résolution
+                                </label>
+                                <select class="form-select" id="print_resolution" name="print_resolution">
+                                    <option value="384" {% if config.print_resolution == 384 %}selected{% endif %}>384 pixels (Standard)</option>
+                                    <option value="576" {% if config.print_resolution == 576 %}selected{% endif %}>576 pixels (Haute définition)</option>
+                                </select>
+                                <div class="form-text">Résolution d'impression</div>
+                            </div>
                         </div>
                     </div>
                 </div>
                 
                 <!-- Statut de l'imprimante -->
-                <div class="row">
+                <div class="row mt-3">
                     <div class="col-12">
                         <div class="alert alert-info d-flex align-items-center" id="printer-status">
                             <div class="spinner-border spinner-border-sm me-2" role="status">
@@ -894,6 +946,21 @@ function toggleUsbCameraSettings() {
     }
 }
 
+// Gestion de l'affichage des paramètres imprimante selon le type
+function togglePrinterSettings() {
+    var printerType = document.getElementById('printer_type').value;
+    var cupsSettings = document.getElementById('cups_printer_settings');
+    var thermalSettings = document.getElementById('thermal_printer_settings');
+    
+    if (printerType === 'cups') {
+        cupsSettings.style.display = 'block';
+        thermalSettings.style.display = 'none';
+    } else {
+        cupsSettings.style.display = 'none';
+        thermalSettings.style.display = 'block';
+    }
+}
+
 // Mettre à jour l'apparence des cartes de sélection
 function updateCameraCardSelection() {
     var selectedType = document.querySelector('input[name="camera_type"]:checked').value;
@@ -960,6 +1027,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     updateCameraCardSelection();
     toggleUsbCameraSettings();
+    
+    // Initialiser l'affichage des paramètres imprimante
+    togglePrinterSettings();
     
     // Vérifier l'état de l'imprimante au chargement
     checkPrinterStatus();
