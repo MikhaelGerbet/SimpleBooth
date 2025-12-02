@@ -35,9 +35,15 @@ venv.bak/
 
 # Photos et fichiers temporaires
 photos/
+effet/
+
+# Dossiers dynamiques dans static (contenu généré)
+static/qrcodes/
+static/overlays/
+
 # Permettre les fichiers statiques nécessaires
 !static/
-!static/*
+!static/camera-placeholder.svg
 
 # Configuration
 config.json

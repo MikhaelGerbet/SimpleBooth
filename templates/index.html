@@ -5,6 +5,31 @@
 {% block content %}
 <div class="container-fluid p-0" style="height: 100vh; overflow: hidden; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: #1a1a1a;">
     <style>
+    /* Empêcher la sélection sur tous les éléments interactifs */
+    * {
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+        -webkit-tap-highlight-color: transparent;
+    }
+    
+    /* Empêcher le drag sur les images */
+    img {
+        -webkit-user-drag: none;
+        -khtml-user-drag: none;
+        -moz-user-drag: none;
+        -o-user-drag: none;
+        user-drag: none;
+        pointer-events: none;
+    }
+    
+    /* Réactiver pointer-events sur les boutons */
+    button, .btn, a {
+        pointer-events: auto;
+    }
+    
     /* Layout principal : preview à gauche, options à droite */
     .main-layout {
         display: flex;

@@ -4,7 +4,7 @@ import logging
 
 PHOTOS_FOLDER = 'photos'
 EFFECT_FOLDER = 'effet'
-OVERLAYS_FOLDER = 'overlays'
+OVERLAYS_FOLDER = 'static/overlays'
 CONFIG_FILE = 'config.json'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 

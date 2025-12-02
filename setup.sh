@@ -296,8 +296,12 @@ setup_directories() {
   mkdir -p "$APP_DIR/static/qrcodes"
   log "Dossier static/qrcodes/ créé (cache QR Code Telegram)"
   
+  # Dossier pour les overlays
+  mkdir -p "$APP_DIR/static/overlays"
+  log "Dossier static/overlays/ créé"
+  
   # Permissions pour l'utilisateur
-  chown -R "$INSTALL_USER:$INSTALL_USER" "$APP_DIR/photos" "$APP_DIR/effet" "$APP_DIR/static/qrcodes"
+  chown -R "$INSTALL_USER:$INSTALL_USER" "$APP_DIR/photos" "$APP_DIR/effet" "$APP_DIR/static/qrcodes" "$APP_DIR/static/overlays"
   
   ok "Dossiers de l'application créés"
 }
