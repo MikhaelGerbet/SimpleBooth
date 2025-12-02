@@ -269,27 +269,7 @@
                     </div>
                 </div>
                 
-                <!-- Sélection du fournisseur IA -->
                 <div class="row">
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="ai_provider" class="form-label fw-bold">
-                                <i class="fas fa-robot me-2 text-warning"></i>Fournisseur IA
-                            </label>
-                            <select class="form-select" id="ai_provider" name="ai_provider" onchange="toggleAIProviderFields()">
-                                <option value="huggingface" {{ 'selected' if config.ai_provider == 'huggingface' else '' }}>
-                                    🤗 Hugging Face (Gratuit - Image-to-Image réel)
-                                </option>
-                                <option value="cloudflare" {{ 'selected' if config.ai_provider == 'cloudflare' else '' }}>
-                                    ☁️ Cloudflare AI (Gratuit - Text-to-Image)
-                                </option>
-                                <option value="runware" {{ 'selected' if config.ai_provider == 'runware' else '' }}>
-                                    🚀 Runware (Payant - Haute qualité)
-                                </option>
-                            </select>
-                            <div class="form-text">Hugging Face transforme votre photo, Cloudflare génère une nouvelle image</div>
-                        </div>
-                    </div>
                     <div class="col-md-6">
                         <div class="mb-3">
                             <label for="effect_prompt" class="form-label fw-bold">
@@ -303,87 +283,7 @@
                             <div class="form-text">Description de l'effet à appliquer (en anglais)</div>
                         </div>
                     </div>
-                </div>
-                
-                <!-- Configuration Hugging Face -->
-                <div id="huggingface_config" class="row">
-                    <div class="col-12">
-                        <div class="alert alert-success">
-                            <i class="fas fa-check-circle me-2"></i>
-                            <strong>Hugging Face</strong> - Gratuit et transforme VRAIMENT votre photo (image-to-image).
-                            <a href="https://huggingface.co/join" target="_blank" class="alert-link">
-                                Créer un compte Hugging Face
-                            </a>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="huggingface_api_token" class="form-label fw-bold">
-                                <i class="fas fa-key me-2 text-warning"></i>Token API Hugging Face
-                            </label>
-                            <input type="password" 
-                                   class="form-control" 
-                                   id="huggingface_api_token" 
-                                   name="huggingface_api_token" 
-                                   value="{{ config.huggingface_api_token }}"
-                                   placeholder="hf_xxxxxxxxxxxx">
-                            <div class="form-text">Settings → Access Tokens → New token (Read)</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Configuration Cloudflare AI -->
-                <div id="cloudflare_config" class="row">
-                    <div class="col-12">
-                        <div class="alert alert-info">
-                            <i class="fas fa-info-circle me-2"></i>
-                            <strong>Cloudflare Workers AI</strong> - Gratuit jusqu'à 10 000 images par jour.
-                            <a href="https://dash.cloudflare.com/sign-up/workers-and-pages" target="_blank" class="alert-link">
-                                Créer un compte Cloudflare
-                            </a>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="cloudflare_account_id" class="form-label fw-bold">
-                                <i class="fas fa-id-card me-2 text-warning"></i>Account ID Cloudflare
-                            </label>
-                            <input type="text" 
-                                   class="form-control" 
-                                   id="cloudflare_account_id" 
-                                   name="cloudflare_account_id" 
-                                   value="{{ config.cloudflare_account_id }}"
-                                   placeholder="Ex: abc123def456...">
-                            <div class="form-text">Trouvez-le dans le Dashboard Cloudflare → Workers & Pages</div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="cloudflare_api_token" class="form-label fw-bold">
-                                <i class="fas fa-key me-2 text-warning"></i>API Token Cloudflare
-                            </label>
-                            <input type="password" 
-                                   class="form-control" 
-                                   id="cloudflare_api_token" 
-                                   name="cloudflare_api_token" 
-                                   value="{{ config.cloudflare_api_token }}"
-                                   placeholder="Votre token API">
-                            <div class="form-text">Créez un token avec les permissions "Workers AI" → "Edit"</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Configuration Runware -->
-                <div id="runware_config" class="row">
-                    <div class="col-12">
-                        <div class="alert alert-warning">
-                            <i class="fas fa-coins me-2"></i>
-                            <strong>Runware</strong> - Service payant avec haute qualité d'image.
-                            <a href="https://runware.ai" target="_blank" class="alert-link">
-                                Créer un compte Runware
-                            </a>
-                        </div>
-                    </div>
+                    
                     <div class="col-md-6">
                         <div class="mb-3">
                             <label for="runware_api_key" class="form-label fw-bold">
@@ -395,7 +295,9 @@
                                    name="runware_api_key" 
                                    value="{{ config.runware_api_key }}"
                                    placeholder="Votre clé API Runware">
-                            <div class="form-text">Clé d'accès à l'API Runware pour les effets IA</div>
+                            <div class="form-text">
+                                <a href="https://runware.ai" target="_blank">Créer un compte Runware</a> pour obtenir une clé API
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1061,28 +963,6 @@ function togglePrinterSettings() {
     }
 }
 
-// Gestion de l'affichage des paramètres selon le fournisseur IA
-function toggleAIProviderFields() {
-    var aiProvider = document.getElementById('ai_provider').value;
-    var huggingfaceConfig = document.getElementById('huggingface_config');
-    var cloudflareConfig = document.getElementById('cloudflare_config');
-    var runwareConfig = document.getElementById('runware_config');
-    
-    // Masquer toutes les configs
-    huggingfaceConfig.style.display = 'none';
-    cloudflareConfig.style.display = 'none';
-    runwareConfig.style.display = 'none';
-    
-    // Afficher la config sélectionnée
-    if (aiProvider === 'huggingface') {
-        huggingfaceConfig.style.display = 'flex';
-    } else if (aiProvider === 'cloudflare') {
-        cloudflareConfig.style.display = 'flex';
-    } else if (aiProvider === 'runware') {
-        runwareConfig.style.display = 'flex';
-    }
-}
-
 // Mettre à jour l'apparence des cartes de sélection
 function updateCameraCardSelection() {
     var selectedType = document.querySelector('input[name="camera_type"]:checked').value;
@@ -1152,9 +1032,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initialiser l'affichage des paramètres imprimante
     togglePrinterSettings();
-    
-    // Initialiser l'affichage des paramètres fournisseur IA
-    toggleAIProviderFields();
     
     // Vérifier l'état de l'imprimante au chargement
     checkPrinterStatus();

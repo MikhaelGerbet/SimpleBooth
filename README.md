@@ -5,8 +5,6 @@
 ![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
 ![Flask](https://img.shields.io/badge/Flask-2.3.3-green.svg)
 ![Raspberry Pi](https://img.shields.io/badge/Raspberry%20Pi%204%2F5-Compatible-red.svg)
-![Hugging Face](https://img.shields.io/badge/Hugging%20Face-Gratuit-yellow.svg)
-![Cloudflare AI](https://img.shields.io/badge/Cloudflare%20AI-Gratuit-orange.svg)
 ![Runware](https://img.shields.io/badge/Runware%20AI-Intégré-purple.svg)
 ![Telegram](https://img.shields.io/badge/Telegram-Bot-blue.svg)
 ![OpenCV](https://img.shields.io/badge/OpenCV-Support%20USB-brightgreen.svg)
@@ -21,7 +19,7 @@ Cette application transforme votre Raspberry Pi en un WizardPhotoBox professionn
 - **Compatible Raspberry Pi 4 et 5** (détection automatique rpicam-vid/libcamera-vid)
 - **Interface tactile optimisée** pour écran 7 pouces
 - **Capture photo instantanée** directement depuis le flux vidéo
-- **Effets IA** via **Hugging Face** (gratuit, transforme votre photo), **Cloudflare AI** ou **Runware**
+- **Effets IA** via **Runware** pour transformer vos photos en style artistique
 - **Diaporama automatique** configurable après période d'inactivité
 - **Bot Telegram** pour envoi automatique des photos sur un groupe/canal
 - **Impression photo couleur** via Canon SELPHY CP1500 (CUPS)
@@ -287,9 +285,6 @@ La configuration est sauvegardée dans `config.json` :
 | `effect_enabled` | Activer les effets IA | false |
 | `effect_prompt` | Description de l'effet | "Transform..." |
 | `effect_steps` | Étapes de génération (1-50) | 5 |
-| `ai_provider` | Fournisseur IA (cloudflare/runware) | "cloudflare" |
-| `cloudflare_account_id` | Account ID Cloudflare | "" |
-| `cloudflare_api_token` | Token API Cloudflare | "" |
 | `runware_api_key` | Clé API Runware | "" |
 
 ### Telegram
@@ -300,85 +295,36 @@ La configuration est sauvegardée dans `config.json` :
 | `telegram_chat_id` | ID du chat/groupe | "" |
 | `telegram_send_type` | Photos à envoyer | "photos" |
 
-## 🤖 Configuration des Effets IA
+## 🤖 Configuration des Effets IA (Runware)
 
-SimpleBooth supporte trois fournisseurs pour les effets IA :
-
-### 🤗 Hugging Face (Gratuit - Recommandé pour photobooth)
+SimpleBooth utilise **Runware** pour les effets IA qui transforment vraiment vos photos (image-to-image).
 
 **Avantages :**
-- ✅ **Gratuit** avec limite généreuse
-- ✅ **Transforme VRAIMENT votre photo** (image-to-image)
-- ✅ Modèle InstructPix2Pix pour des transformations naturelles
-- ✅ Parfait pour un photobooth
-
-**Configuration :**
-
-1. **Créer un compte Hugging Face** :
-   - Allez sur [huggingface.co/join](https://huggingface.co/join)
-   - Créez un compte gratuit
-
-2. **Créer un Token API** :
-   - Connectez-vous sur [huggingface.co](https://huggingface.co)
-   - Cliquez sur votre avatar → **Settings**
-   - Menu gauche → **Access Tokens**
-   - Cliquez sur **New token**
-   - Nom : `SimpleBooth`
-   - Type : **Read** (suffisant)
-   - Cliquez sur **Generate token**
-   - **Copiez le token** (commence par `hf_`)
-
-3. **Configurer dans SimpleBooth** :
-   - Accédez à `/admin`
-   - Section **Effets IA** :
-     - Fournisseur : **Hugging Face (Gratuit - Image-to-Image réel)**
-     - Token API : Collez votre token `hf_xxxx...`
-   - Sauvegardez
-
-**Prompts recommandés pour photobooth :**
-```
-Turn this photo into a ghibli style anime illustration
-Transform into a watercolor painting
-Make it look like a professional studio portrait
-Apply a vintage film effect
-```
-
-### ☁️ Cloudflare Workers AI (Gratuit - Text-to-Image uniquement)
-
-**⚠️ Attention :** Cloudflare génère une **nouvelle image** basée sur le prompt, il ne transforme PAS votre photo originale.
-
-**Avantages :**
-- ✅ **Gratuit** : 10 000 images/jour incluses
-- ✅ Rapide (modèle Lightning)
-
-**Configuration :**
-
-1. **Créer un compte Cloudflare** :
-   - Allez sur [dash.cloudflare.com/sign-up](https://dash.cloudflare.com/sign-up)
-
-2. **Récupérer l'Account ID** :
-   - Dashboard → **Workers & Pages** → Account ID à droite
-
-3. **Créer un API Token** :
-   - **My Profile** → **API Tokens** → **Create Token**
-   - Permissions : `Account` → `Workers AI` → `Edit`
-
-4. **Configurer dans SimpleBooth**
-
-### 🚀 Runware (Payant - Haute qualité)
-
-**Avantages :**
-- Qualité supérieure
-- Plus de modèles disponibles
-- Contrôle avancé (strength, guidance scale)
+- ✅ Transforme VRAIMENT votre photo (pas de génération aléatoire)
+- ✅ Haute qualité d'image
+- ✅ Nombreux styles disponibles
+- ✅ Contrôle avancé (strength, guidance scale)
 
 **Configuration :**
 
 1. **Créer un compte** sur [runware.ai](https://runware.ai)
 2. **Obtenir une clé API** dans le dashboard
 3. **Configurer dans SimpleBooth** :
-   - Fournisseur : **Runware (Payant)**
-   - Clé API : Votre clé Runware
+   - Accédez à `/admin`
+   - Section **Effets IA** :
+     - Activez les effets
+     - Clé API : Votre clé Runware
+     - Prompt : Description de l'effet (en anglais)
+   - Sauvegardez
+
+**Prompts recommandés :**
+```
+Transform this photo into a beautiful ghibli style anime illustration
+Turn into a watercolor painting with soft colors
+Make it look like a professional studio portrait
+Apply a vintage film photography effect
+Transform into a cartoon style illustration
+```
 
 ## 📱 Configuration Telegram
 
