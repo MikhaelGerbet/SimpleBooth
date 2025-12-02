@@ -182,12 +182,17 @@
         
 
         
-        <!-- Configuration Diaporama -->
+        <!-- Configuration Diaporama / Écran de veille -->
         <div class="card mb-4">
             <div class="card-header bg-info text-white">
-                <h3 class="mb-0"><i class="fas fa-play-circle me-2"></i>Configuration Diaporama</h3>
+                <h3 class="mb-0"><i class="fas fa-tv me-2"></i>Écran de veille (Diaporama)</h3>
             </div>
             <div class="card-body">
+                <div class="alert alert-info mb-4">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Mode veille :</strong> Après une période d'inactivité, un diaporama des photos prises s'affiche avec un bouton pour prendre une nouvelle photo. Toucher l'écran ou cliquer désactive le mode veille.
+                </div>
+                
                 <div class="row">
                     <div class="col-md-6">
                         <div class="mb-3">
@@ -201,17 +206,17 @@
                                        name="slideshow_enabled"
                                        {{ 'checked' if config.slideshow_enabled else '' }}>
                                 <label class="form-check-label" for="slideshow_enabled">
-                                    Activer le diaporama automatique
+                                    Activer l'écran de veille
                                 </label>
                             </div>
-                            <div class="form-text">Le diaporama se lance automatiquement après inactivité</div>
+                            <div class="form-text">L'écran de veille se lance automatiquement après inactivité</div>
                         </div>
                     </div>
                     
                     <div class="col-md-6">
                         <div class="mb-3">
                             <label for="slideshow_delay" class="form-label fw-bold">
-                                <i class="fas fa-hourglass-half me-2 text-info"></i>Délai d'activation
+                                <i class="fas fa-hourglass-half me-2 text-info"></i>Délai avant activation
                             </label>
                             <input type="number" 
                                    class="form-control" 
@@ -220,12 +225,28 @@
                                    value="{{ config.slideshow_delay }}"
                                    min="10" 
                                    max="300">
-                            <div class="form-text">Temps d'inactivité avant le diaporama (10-300 secondes)</div>
+                            <div class="form-text">Temps d'inactivité avant le mode veille (10-300 secondes)</div>
                         </div>
                     </div>
                 </div>
                 
                 <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="slideshow_photo_duration" class="form-label fw-bold">
+                                <i class="fas fa-clock me-2 text-info"></i>Durée par photo
+                            </label>
+                            <input type="number" 
+                                   class="form-control" 
+                                   id="slideshow_photo_duration" 
+                                   name="slideshow_photo_duration" 
+                                   value="{{ config.slideshow_photo_duration | default(5) }}"
+                                   min="2" 
+                                   max="30">
+                            <div class="form-text">Durée d'affichage de chaque photo (2-30 secondes)</div>
+                        </div>
+                    </div>
+                    
                     <div class="col-md-6">
                         <div class="mb-3">
                             <label for="slideshow_source" class="form-label fw-bold">

@@ -286,9 +286,10 @@ La configuration est sauvegardée dans `config.json` :
 ### Diaporama
 | Option | Description | Défaut |
 |--------|-------------|--------|
-| `slideshow_enabled` | Activer le diaporama | false |
-| `slideshow_delay` | Délai d'inactivité (10-300s) | 60 |
-| `slideshow_source` | Source photos | "photos" |
+| `slideshow_enabled` | Activer l'écran de veille | false |
+| `slideshow_delay` | Délai d'inactivité avant activation (10-300s) | 60 |
+| `slideshow_photo_duration` | Durée d'affichage par photo (2-30s) | 5 |
+| `slideshow_source` | Source photos (photos/effet) | "photos" |
 
 ### Effets IA
 | Option | Description | Défaut |

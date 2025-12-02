@@ -266,26 +266,118 @@
     </div>
 </div>
 
-<!-- Overlay diaporama -->
-<div id="slideshowOverlay" class="d-none" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #000; z-index: 9999; display: flex; align-items: center; justify-content: center;">
-    <div class="slideshow-container" style="width: 100%; height: 100%; position: relative;">
-        <img id="slideshowImage" 
-             style="width: 100%; height: 100%; object-fit: contain;" 
-             alt="Photo du diaporama">
+<!-- Overlay écran de veille / diaporama -->
+<div id="slideshowOverlay" class="d-none" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #000; z-index: 9999;">
+    <style>
+        /* Styles pour l'écran de veille */
+        .screensaver-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+        }
         
-        <!-- Indicateur de progression -->
-        <div class="slideshow-info position-absolute bottom-0 start-0 end-0 p-4 text-white" style="background: linear-gradient(transparent, rgba(0,0,0,0.7));">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h5 class="mb-1" id="slideshowTitle">Diaporama</h5>
-                    <small id="slideshowCounter">Photo 1 sur 10</small>
-                </div>
-                <div class="text-end">
-                    <small class="text-muted">Appuyez sur l'écran pour revenir</small>
-                </div>
-            </div>
-
+        /* Photo en fond avec transition fluide */
+        .screensaver-photo {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background-color: #000;
+            opacity: 0;
+            transition: opacity 1s ease-in-out;
+        }
+        
+        .screensaver-photo.active {
+            opacity: 1;
+        }
+        
+        /* Bouton capture flottant */
+        .screensaver-capture-btn {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 1.5rem 3rem;
+            font-size: 1.8rem;
+            font-weight: bold;
+            background: linear-gradient(180deg, #dc3545 0%, #a71d2a 100%);
+            border: none;
+            border-radius: 50px;
+            color: white;
+            box-shadow: 0 8px 30px rgba(220, 53, 69, 0.6);
+            cursor: pointer;
+            z-index: 10;
+            animation: pulse-btn 2s infinite;
+            transition: transform 0.2s ease;
+        }
+        
+        .screensaver-capture-btn:hover {
+            transform: translateX(-50%) scale(1.05);
+        }
+        
+        @keyframes pulse-btn {
+            0%, 100% { box-shadow: 0 8px 30px rgba(220, 53, 69, 0.6); }
+            50% { box-shadow: 0 8px 50px rgba(220, 53, 69, 0.9); }
+        }
+        
+        /* Indicateur de progression */
+        .screensaver-progress {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #dc3545, #ff6b7a);
+            transition: width linear;
+        }
+        
+        /* Info en haut */
+        .screensaver-info {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.7);
+            padding: 0.75rem 1.5rem;
+            border-radius: 30px;
+            color: white;
+            font-size: 0.9rem;
+            z-index: 10;
+            backdrop-filter: blur(10px);
+        }
+        
+        /* Animation d'entrée */
+        .screensaver-container.entering .screensaver-capture-btn {
+            animation: slide-up 0.5s ease-out forwards;
+        }
+        
+        @keyframes slide-up {
+            from { transform: translateX(-50%) translateY(100px); opacity: 0; }
+            to { transform: translateX(-50%) translateY(0); opacity: 1; }
+        }
+    </style>
+    
+    <div class="screensaver-container">
+        <!-- Photos (2 éléments pour transition fluide) -->
+        <img id="slideshowImage1" class="screensaver-photo" alt="Photo">
+        <img id="slideshowImage2" class="screensaver-photo" alt="Photo">
+        
+        <!-- Info en haut -->
+        <div class="screensaver-info">
+            <i class="fas fa-images me-2"></i>
+            <span id="slideshowCounter">Photo 1 sur 10</span>
         </div>
+        
+        <!-- Bouton capture toujours visible -->
+        <button class="screensaver-capture-btn" onclick="exitScreensaverAndCapture()">
+            <i class="fas fa-camera me-3"></i>
+            PRENDRE UNE PHOTO
+        </button>
+        
+        <!-- Barre de progression -->
+        <div class="screensaver-progress" id="slideshowProgress"></div>
     </div>
 </div>
 {% endblock %}
@@ -499,12 +591,14 @@ function resetCaptureButton() {
     captureBtn.innerHTML = '<i class="fas fa-camera me-2"></i>PHOTO';
 }
 
-// Variables pour le diaporama
+// Variables pour le diaporama / écran de veille
 let slideshowConfig = null;
 let slideshowPhotos = [];
 let slideshowActive = false;
 let slideshowIndex = 0;
 let slideshowInterval = null;
+let slideshowProgressInterval = null;
+let currentPhotoElement = 1; // Alterne entre 1 et 2 pour les transitions
 
 let inactivityTimer = null;
 let lastActivity = Date.now();
@@ -532,20 +626,28 @@ async function loadSlideshowConfig() {
 function setupActivityTracking() {
     // Détecter l'activité utilisateur
     ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'].forEach(event => {
-        document.addEventListener(event, resetInactivityTimer, true);
+        document.addEventListener(event, handleActivity, true);
     });
 }
 
-function resetInactivityTimer() {
+function handleActivity(e) {
     lastActivity = Date.now();
     
+    // Si le diaporama est actif et qu'on clique ailleurs que sur le bouton
     if (slideshowActive) {
-        // Si le diaporama est actif, le fermer
+        // Ne pas fermer si on clique sur le bouton capture (il a son propre handler)
+        if (e.target.closest('.screensaver-capture-btn')) {
+            return;
+        }
         stopSlideshow();
         return;
     }
     
     // Redémarrer le timer d'inactivité
+    resetInactivityTimer();
+}
+
+function resetInactivityTimer() {
     if (inactivityTimer) {
         clearTimeout(inactivityTimer);
     }
@@ -560,11 +662,13 @@ function startInactivityTimer() {
         clearTimeout(inactivityTimer);
     }
     
+    const delay = (slideshowConfig?.delay || 60) * 1000;
+    
     inactivityTimer = setTimeout(() => {
-        if (!slideshowActive && slideshowPhotos.length > 0) {
+        if (!slideshowActive && !isCapturing && slideshowPhotos.length > 0) {
             startSlideshow();
         }
-    }, slideshowConfig.delay * 1000);
+    }, delay);
 }
 
 function startSlideshow() {
@@ -572,22 +676,28 @@ function startSlideshow() {
     
     slideshowActive = true;
     slideshowIndex = 0;
+    currentPhotoElement = 1;
     
     const overlay = document.getElementById('slideshowOverlay');
     overlay.classList.remove('d-none');
-    overlay.style.display = 'flex';
     
-    // Ajouter l'événement de clic pour fermer
-    overlay.addEventListener('click', stopSlideshow);
+    // Animation d'entrée
+    overlay.querySelector('.screensaver-container').classList.add('entering');
+    setTimeout(() => {
+        overlay.querySelector('.screensaver-container').classList.remove('entering');
+    }, 500);
     
+    // Afficher la première photo
     showCurrentSlide();
     
-    // Démarrer la rotation automatique (5 secondes par photo)
+    // Démarrer la rotation automatique
+    const photoDuration = (slideshowConfig?.photo_duration || 5) * 1000;
     slideshowInterval = setInterval(() => {
         nextSlide();
-    }, 5000);
+    }, photoDuration);
     
-
+    // Démarrer la barre de progression
+    startProgressBar();
 }
 
 function stopSlideshow() {
@@ -595,15 +705,16 @@ function stopSlideshow() {
     
     const overlay = document.getElementById('slideshowOverlay');
     overlay.classList.add('d-none');
-    overlay.style.display = 'none';
     
     // Nettoyer les intervals
     if (slideshowInterval) {
         clearInterval(slideshowInterval);
         slideshowInterval = null;
     }
-    
-
+    if (slideshowProgressInterval) {
+        clearInterval(slideshowProgressInterval);
+        slideshowProgressInterval = null;
+    }
     
     // Redémarrer le timer d'inactivité
     startInactivityTimer();
@@ -612,19 +723,61 @@ function stopSlideshow() {
 function showCurrentSlide() {
     if (slideshowPhotos.length === 0) return;
     
-    const image = document.getElementById('slideshowImage');
+    const photo1 = document.getElementById('slideshowImage1');
+    const photo2 = document.getElementById('slideshowImage2');
     const counter = document.getElementById('slideshowCounter');
     
-    image.src = `/photos/${slideshowPhotos[slideshowIndex]}`;
+    // Déterminer la source (photos ou effet)
+    const source = slideshowConfig?.source === 'effet' ? 'effet' : 'photos';
+    const photoUrl = `/${source}/${slideshowPhotos[slideshowIndex]}`;
+    
+    // Transition fluide entre les deux éléments
+    if (currentPhotoElement === 1) {
+        photo1.src = photoUrl;
+        photo1.classList.add('active');
+        photo2.classList.remove('active');
+        currentPhotoElement = 2;
+    } else {
+        photo2.src = photoUrl;
+        photo2.classList.add('active');
+        photo1.classList.remove('active');
+        currentPhotoElement = 1;
+    }
+    
     counter.textContent = `Photo ${slideshowIndex + 1} sur ${slideshowPhotos.length}`;
     
-
+    // Reset la barre de progression
+    startProgressBar();
 }
 
 function nextSlide() {
     slideshowIndex = (slideshowIndex + 1) % slideshowPhotos.length;
     showCurrentSlide();
+}
 
+function startProgressBar() {
+    const progressBar = document.getElementById('slideshowProgress');
+    const duration = (slideshowConfig?.photo_duration || 5) * 1000;
+    
+    // Reset
+    progressBar.style.transition = 'none';
+    progressBar.style.width = '0%';
+    
+    // Force reflow
+    progressBar.offsetHeight;
+    
+    // Animer
+    progressBar.style.transition = `width ${duration}ms linear`;
+    progressBar.style.width = '100%';
+}
+
+// Fonction appelée quand on clique sur le bouton "Prendre une photo"
+function exitScreensaverAndCapture() {
+    stopSlideshow();
+    // Petit délai pour que l'overlay se ferme avant de lancer la capture
+    setTimeout(() => {
+        capturePhoto();
+    }, 100);
 }
 
 

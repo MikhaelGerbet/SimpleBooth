@@ -1009,6 +1009,9 @@ def save_admin_config():
         slideshow_delay = request.form.get('slideshow_delay', '60').strip()
         config['slideshow_delay'] = int(slideshow_delay) if slideshow_delay else 60
         
+        slideshow_photo_duration = request.form.get('slideshow_photo_duration', '5').strip()
+        config['slideshow_photo_duration'] = int(slideshow_photo_duration) if slideshow_photo_duration else 5
+        
         config['slideshow_source'] = request.form.get('slideshow_source', 'photos')
         config['effect_enabled'] = 'effect_enabled' in request.form
         config['effect_prompt'] = request.form.get('effect_prompt', '')
@@ -1162,7 +1165,7 @@ def reprint_photo(filename):
 
 @app.route('/api/slideshow')
 def get_slideshow_data():
-    """API pour récupérer les données du diaporama"""
+    """API pour récupérer les données du diaporama/écran de veille"""
     photos = []
     
     # Déterminer le dossier source selon la configuration
@@ -1178,6 +1181,7 @@ def get_slideshow_data():
     return jsonify({
         'enabled': config.get('slideshow_enabled', False),
         'delay': config.get('slideshow_delay', 60),
+        'photo_duration': config.get('slideshow_photo_duration', 5),
         'source': config.get('slideshow_source', 'photos'),
         'photos': photos
     })
