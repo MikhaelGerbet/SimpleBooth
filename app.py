@@ -158,6 +158,7 @@ def detect_serial_ports():
 # Variables globales
 config = load_config()
 current_photo = None
+original_photo = None  # Photo originale pour régénérer les effets
 camera_active = False
 camera_process = None
 usb_camera = None
@@ -173,8 +174,8 @@ frame_lock = threading.Lock()
 
 @app.route('/capture', methods=['POST'])
 def capture_photo():
-    """Capturer la frame MJPEG actuelle directement depuis le flux vidéo"""
-    global current_photo, last_frame
+    """Capturer une photo haute résolution pour impression 10x15cm (300dpi)"""
+    global current_photo, original_photo, last_frame
     
     try:
         # Générer un nom de fichier unique
@@ -182,26 +183,83 @@ def capture_photo():
         filename = f'photo_{timestamp}.jpg'
         filepath = os.path.join(PHOTOS_FOLDER, filename)
         
-        # Capturer la frame actuelle du flux MJPEG
-        with frame_lock:
-            if last_frame is not None:
-                # Sauvegarder la frame directement
-                with open(filepath, 'wb') as f:
-                    f.write(last_frame)
-                
-                current_photo = filename
-                logger.info(f"Frame MJPEG capturée avec succès: {filename}")
-                
-                # Envoyer sur Telegram si activé
-                send_type = config.get('telegram_send_type', 'photos')
-                if send_type in ['photos', 'both']:
-                    threading.Thread(target=send_to_telegram, args=(filepath, config, "photo")).start()
-                
-                return jsonify({'success': True, 'filename': filename})
-            else:
-                logger.info("Aucune frame disponible dans le flux")
-                return jsonify({'success': False, 'error': 'Aucune frame disponible'})
+        camera_type = config.get('camera_type', 'picamera')
+        
+        if camera_type == 'usb':
+            # Pour caméra USB, utiliser la frame du flux
+            with frame_lock:
+                if last_frame is not None:
+                    with open(filepath, 'wb') as f:
+                        f.write(last_frame)
+                    logger.info(f"Photo USB capturée: {filename}")
+                else:
+                    return jsonify({'success': False, 'error': 'Aucune frame disponible'})
+        else:
+            # Pour Pi Camera: capture haute résolution avec rpicam-still/libcamera-still
+            import shutil
             
+            if shutil.which('rpicam-still'):
+                still_cmd = 'rpicam-still'
+            elif shutil.which('libcamera-still'):
+                still_cmd = 'libcamera-still'
+            else:
+                # Fallback: utiliser la frame du flux
+                with frame_lock:
+                    if last_frame is not None:
+                        with open(filepath, 'wb') as f:
+                            f.write(last_frame)
+                        logger.info(f"Photo (fallback flux) capturée: {filename}")
+                    else:
+                        return jsonify({'success': False, 'error': 'Aucune frame disponible'})
+                current_photo = filename
+                original_photo = filename
+                return jsonify({'success': True, 'filename': filename})
+            
+            # Capture haute résolution pour impression 10x15 cm @ 300dpi
+            # Résolution: 1800x1200 minimum, on prend 2400x1600 pour marge
+            # Ou max: 4608x2592 pour la meilleure qualité
+            cmd = [
+                still_cmd,
+                '--output', filepath,
+                '--width', '2400',      # Largeur optimale pour 10x15 @ 300dpi
+                '--height', '1600',     # Hauteur optimale (ratio 3:2 = 10x15)
+                '--quality', '95',      # Qualité JPEG élevée
+                '--immediate',          # Capture immédiate sans délai
+                '--nopreview',          # Pas d'aperçu
+                '--timeout', '1'        # Timeout minimal
+            ]
+            
+            logger.info(f"[CAPTURE] Commande: {' '.join(cmd)}")
+            
+            result = subprocess.run(cmd, capture_output=True, timeout=10)
+            
+            if result.returncode != 0:
+                error_msg = result.stderr.decode() if result.stderr else "Erreur inconnue"
+                logger.error(f"[CAPTURE] Erreur: {error_msg}")
+                # Fallback sur le flux si la capture échoue
+                with frame_lock:
+                    if last_frame is not None:
+                        with open(filepath, 'wb') as f:
+                            f.write(last_frame)
+                        logger.info(f"Photo (fallback après erreur) capturée: {filename}")
+                    else:
+                        return jsonify({'success': False, 'error': f'Erreur capture: {error_msg}'})
+            else:
+                logger.info(f"[CAPTURE] Photo haute résolution capturée: {filename} (2400x1600)")
+        
+        current_photo = filename
+        original_photo = filename
+        
+        # Envoyer sur Telegram si activé
+        send_type = config.get('telegram_send_type', 'photos')
+        if send_type in ['photos', 'both']:
+            threading.Thread(target=send_to_telegram, args=(filepath, config, "photo")).start()
+        
+        return jsonify({'success': True, 'filename': filename})
+            
+    except subprocess.TimeoutExpired:
+        logger.error("[CAPTURE] Timeout lors de la capture")
+        return jsonify({'success': False, 'error': 'Timeout de capture'})
     except Exception as e:
         logger.info(f"Erreur lors de la capture: {e}")
         return jsonify({'success': False, 'error': f'Erreur de capture: {str(e)}'})
@@ -310,7 +368,7 @@ def print_photo():
 @app.route('/delete_current', methods=['POST'])
 def delete_current_photo():
     """Supprimer la photo actuelle (depuis photos ou effet)"""
-    global current_photo
+    global current_photo, original_photo
     
     if current_photo:
         try:
@@ -324,6 +382,7 @@ def delete_current_photo():
             if photo_path and os.path.exists(photo_path):
                 os.remove(photo_path)
                 current_photo = None
+                original_photo = None  # Réinitialiser aussi l'original
                 return jsonify({'success': True})
             else:
                 return jsonify({'success': False, 'error': 'Photo introuvable'})
@@ -335,9 +394,12 @@ def delete_current_photo():
 @app.route('/apply_effect', methods=['POST'])
 def apply_effect():
     """Appliquer un effet IA à la photo actuelle via Runware"""
-    global current_photo
+    global current_photo, original_photo
     
-    if not current_photo:
+    # Utiliser la photo originale pour permettre la régénération
+    photo_to_process = original_photo if original_photo else current_photo
+    
+    if not photo_to_process:
         return jsonify({'success': False, 'error': 'Aucune photo à traiter'})
     
     if not config.get('effect_enabled', False):
@@ -347,12 +409,13 @@ def apply_effect():
         return jsonify({'success': False, 'error': 'Clé API Runware manquante'})
     
     try:
-        # Chemin de la photo actuelle
-        photo_path = os.path.join(PHOTOS_FOLDER, current_photo)
+        # Toujours utiliser la photo originale (dans PHOTOS_FOLDER)
+        photo_path = os.path.join(PHOTOS_FOLDER, photo_to_process)
         
         if not os.path.exists(photo_path):
-            return jsonify({'success': False, 'error': 'Photo introuvable'})
+            return jsonify({'success': False, 'error': 'Photo originale introuvable'})
         
+        logger.info(f"[IA] Régénération depuis la photo originale: {photo_to_process}")
         result = asyncio.run(apply_effect_runware(photo_path))
         return result
             
