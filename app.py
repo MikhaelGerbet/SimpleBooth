@@ -355,6 +355,10 @@ def apply_effect():
         if not config.get('cloudflare_api_token'):
             return jsonify({'success': False, 'error': 'API Token Cloudflare manquant'})
     
+    if ai_provider == 'huggingface':
+        if not config.get('huggingface_api_token'):
+            return jsonify({'success': False, 'error': 'Token API Hugging Face manquant'})
+    
     try:
         # Chemin de la photo actuelle
         photo_path = os.path.join(PHOTOS_FOLDER, current_photo)
@@ -363,7 +367,9 @@ def apply_effect():
             return jsonify({'success': False, 'error': 'Photo introuvable'})
         
         # Choisir le provider IA
-        if ai_provider == 'cloudflare':
+        if ai_provider == 'huggingface':
+            result = apply_effect_huggingface(photo_path)
+        elif ai_provider == 'cloudflare':
             result = apply_effect_cloudflare(photo_path)
         else:
             result = asyncio.run(apply_effect_runware(photo_path))
@@ -373,6 +379,134 @@ def apply_effect():
     except Exception as e:
         logger.info(f"Erreur lors de l'application de l'effet: {e}")
         return jsonify({'success': False, 'error': f'Erreur IA: {str(e)}'})
+
+
+def apply_effect_huggingface(photo_path):
+    """Appliquer un effet IA via Hugging Face Inference API (image-to-image réel)"""
+    global current_photo
+    
+    try:
+        import requests
+        from PIL import Image
+        import io
+        
+        logger.info("[HUGGINGFACE] Début de l'application de l'effet")
+        logger.info(f"[HUGGINGFACE] Photo source: {photo_path}")
+        
+        api_token = config.get('huggingface_api_token')
+        prompt = config.get('effect_prompt', 'Transform this photo into a beautiful ghibli style anime illustration')
+        
+        # Préparer l'image
+        logger.info("[HUGGINGFACE] Préparation de l'image...")
+        with Image.open(photo_path) as img:
+            # Convertir en RGB si nécessaire
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            
+            # Redimensionner pour l'API (max 1024x1024)
+            img.thumbnail((1024, 1024), Image.LANCZOS)
+            
+            # Convertir en bytes
+            img_buffer = io.BytesIO()
+            img.save(img_buffer, format='JPEG', quality=95)
+            img_bytes = img_buffer.getvalue()
+        
+        # Utiliser le modèle img2img de Stable Diffusion
+        # Modèle recommandé pour img2img : stabilityai/stable-diffusion-xl-refiner-1.0
+        # ou timbrooks/instruct-pix2pix pour les transformations
+        model_id = "timbrooks/instruct-pix2pix"
+        url = f"https://api-inference.huggingface.co/models/{model_id}"
+        
+        headers = {
+            "Authorization": f"Bearer {api_token}",
+        }
+        
+        # Pour instruct-pix2pix, on envoie l'image + le prompt
+        logger.info(f"[HUGGINGFACE] Envoi vers {model_id}...")
+        logger.info(f"[HUGGINGFACE] Prompt: {prompt}")
+        
+        # Envoyer l'image avec le prompt dans les paramètres
+        response = requests.post(
+            url,
+            headers=headers,
+            data=img_bytes,
+            params={"prompt": prompt},
+            timeout=120
+        )
+        
+        logger.info(f"[HUGGINGFACE] Statut réponse: {response.status_code}")
+        
+        if response.status_code == 200:
+            content_type = response.headers.get('content-type', '')
+            
+            if 'image' in content_type:
+                # L'image est retournée directement en binaire
+                image_data = response.content
+                
+                # S'assurer que le dossier effet existe
+                os.makedirs(EFFECT_FOLDER, exist_ok=True)
+                
+                # Créer un nouveau nom de fichier
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                effect_filename = f'effect_{timestamp}.jpg'
+                effect_path = os.path.join(EFFECT_FOLDER, effect_filename)
+                
+                # Sauvegarder l'image
+                with open(effect_path, 'wb') as f:
+                    f.write(image_data)
+                
+                logger.info(f"[HUGGINGFACE] Image sauvegardée: {effect_path}")
+                
+                # Mettre à jour la photo actuelle
+                current_photo = effect_filename
+                
+                # Envoyer sur Telegram si activé
+                send_type = config.get('telegram_send_type', 'photos')
+                if send_type in ['effet', 'both']:
+                    threading.Thread(target=send_to_telegram, args=(effect_path, config, "effet")).start()
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'Effet appliqué avec succès!',
+                    'new_filename': effect_filename
+                })
+            else:
+                try:
+                    error_data = response.json()
+                    error_msg = error_data.get('error', 'Erreur inconnue')
+                    
+                    # Si le modèle est en train de charger
+                    if 'loading' in str(error_msg).lower():
+                        return jsonify({
+                            'success': False, 
+                            'error': 'Le modèle IA est en cours de chargement. Réessayez dans 20-30 secondes.'
+                        })
+                    
+                    logger.info(f"[HUGGINGFACE] Erreur: {error_msg}")
+                    return jsonify({'success': False, 'error': f'Erreur Hugging Face: {error_msg}'})
+                except:
+                    return jsonify({'success': False, 'error': 'Réponse inattendue de Hugging Face'})
+        
+        elif response.status_code == 503:
+            # Modèle en cours de chargement
+            return jsonify({
+                'success': False, 
+                'error': 'Le modèle IA est en cours de chargement. Réessayez dans 20-30 secondes.'
+            })
+        
+        else:
+            try:
+                error_data = response.json()
+                error_msg = error_data.get('error', response.text[:200])
+            except:
+                error_msg = response.text[:200]
+            
+            logger.info(f"[HUGGINGFACE] Erreur {response.status_code}: {error_msg}")
+            return jsonify({'success': False, 'error': f'Erreur Hugging Face: {error_msg}'})
+            
+    except Exception as e:
+        logger.info(f"[HUGGINGFACE] Exception: {e}")
+        return jsonify({'success': False, 'error': f'Erreur Hugging Face: {str(e)}'})
 
 
 def apply_effect_cloudflare(photo_path):
@@ -767,9 +901,10 @@ def save_admin_config():
         config['runware_api_key'] = request.form.get('runware_api_key', '')
         
         # Configuration du fournisseur IA
-        config['ai_provider'] = request.form.get('ai_provider', 'cloudflare')
+        config['ai_provider'] = request.form.get('ai_provider', 'huggingface')
         config['cloudflare_account_id'] = request.form.get('cloudflare_account_id', '')
         config['cloudflare_api_token'] = request.form.get('cloudflare_api_token', '')
+        config['huggingface_api_token'] = request.form.get('huggingface_api_token', '')
         
         config['telegram_enabled'] = 'telegram_enabled' in request.form
         config['telegram_bot_token'] = request.form.get('telegram_bot_token', '')

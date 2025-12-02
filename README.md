@@ -5,6 +5,7 @@
 ![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
 ![Flask](https://img.shields.io/badge/Flask-2.3.3-green.svg)
 ![Raspberry Pi](https://img.shields.io/badge/Raspberry%20Pi%204%2F5-Compatible-red.svg)
+![Hugging Face](https://img.shields.io/badge/Hugging%20Face-Gratuit-yellow.svg)
 ![Cloudflare AI](https://img.shields.io/badge/Cloudflare%20AI-Gratuit-orange.svg)
 ![Runware](https://img.shields.io/badge/Runware%20AI-Intégré-purple.svg)
 ![Telegram](https://img.shields.io/badge/Telegram-Bot-blue.svg)
@@ -20,7 +21,7 @@ Cette application transforme votre Raspberry Pi en un WizardPhotoBox professionn
 - **Compatible Raspberry Pi 4 et 5** (détection automatique rpicam-vid/libcamera-vid)
 - **Interface tactile optimisée** pour écran 7 pouces
 - **Capture photo instantanée** directement depuis le flux vidéo
-- **Effets IA** via **Cloudflare AI** (gratuit) ou **Runware** pour transformer vos photos
+- **Effets IA** via **Hugging Face** (gratuit, transforme votre photo), **Cloudflare AI** ou **Runware**
 - **Diaporama automatique** configurable après période d'inactivité
 - **Bot Telegram** pour envoi automatique des photos sur un groupe/canal
 - **Impression photo couleur** via Canon SELPHY CP1500 (CUPS)
@@ -301,47 +302,68 @@ La configuration est sauvegardée dans `config.json` :
 
 ## 🤖 Configuration des Effets IA
 
-SimpleBooth supporte deux fournisseurs pour les effets IA :
+SimpleBooth supporte trois fournisseurs pour les effets IA :
 
-### ☁️ Cloudflare Workers AI (Gratuit - Recommandé)
+### 🤗 Hugging Face (Gratuit - Recommandé pour photobooth)
+
+**Avantages :**
+- ✅ **Gratuit** avec limite généreuse
+- ✅ **Transforme VRAIMENT votre photo** (image-to-image)
+- ✅ Modèle InstructPix2Pix pour des transformations naturelles
+- ✅ Parfait pour un photobooth
+
+**Configuration :**
+
+1. **Créer un compte Hugging Face** :
+   - Allez sur [huggingface.co/join](https://huggingface.co/join)
+   - Créez un compte gratuit
+
+2. **Créer un Token API** :
+   - Connectez-vous sur [huggingface.co](https://huggingface.co)
+   - Cliquez sur votre avatar → **Settings**
+   - Menu gauche → **Access Tokens**
+   - Cliquez sur **New token**
+   - Nom : `SimpleBooth`
+   - Type : **Read** (suffisant)
+   - Cliquez sur **Generate token**
+   - **Copiez le token** (commence par `hf_`)
+
+3. **Configurer dans SimpleBooth** :
+   - Accédez à `/admin`
+   - Section **Effets IA** :
+     - Fournisseur : **Hugging Face (Gratuit - Image-to-Image réel)**
+     - Token API : Collez votre token `hf_xxxx...`
+   - Sauvegardez
+
+**Prompts recommandés pour photobooth :**
+```
+Turn this photo into a ghibli style anime illustration
+Transform into a watercolor painting
+Make it look like a professional studio portrait
+Apply a vintage film effect
+```
+
+### ☁️ Cloudflare Workers AI (Gratuit - Text-to-Image uniquement)
+
+**⚠️ Attention :** Cloudflare génère une **nouvelle image** basée sur le prompt, il ne transforme PAS votre photo originale.
 
 **Avantages :**
 - ✅ **Gratuit** : 10 000 images/jour incluses
-- ✅ Pas de carte bancaire requise
-- ✅ Modèle Stable Diffusion XL
+- ✅ Rapide (modèle Lightning)
 
 **Configuration :**
 
 1. **Créer un compte Cloudflare** :
    - Allez sur [dash.cloudflare.com/sign-up](https://dash.cloudflare.com/sign-up)
-   - Créez un compte gratuit (email + mot de passe)
-   - Vérifiez votre email
 
-2. **Activer Workers AI** :
-   - Dans le dashboard, cliquez sur **Workers & Pages** dans le menu gauche
-   - Cliquez sur **Overview**
-   - Cloudflare active automatiquement le tier gratuit Workers AI
+2. **Récupérer l'Account ID** :
+   - Dashboard → **Workers & Pages** → Account ID à droite
 
-3. **Récupérer l'Account ID** :
-   - Dashboard → **Workers & Pages**
-   - L'**Account ID** est affiché à droite de la page (32 caractères)
-   - Exemple : `a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6`
+3. **Créer un API Token** :
+   - **My Profile** → **API Tokens** → **Create Token**
+   - Permissions : `Account` → `Workers AI` → `Edit`
 
-4. **Créer un API Token** :
-   - Dashboard → **My Profile** (icône en haut à droite) → **API Tokens**
-   - Cliquez sur **Create Token**
-   - Utilisez le template **Edit Cloudflare Workers** ou créez un custom :
-     - Permissions : `Account` → `Workers AI` → `Edit`
-   - Cliquez sur **Continue to Summary** → **Create Token**
-   - **Copiez le token** (affiché une seule fois !)
-
-5. **Configurer dans SimpleBooth** :
-   - Accédez à `/admin`
-   - Section **Effets IA** :
-     - Fournisseur : **Cloudflare AI (Gratuit)**
-     - Account ID : Collez votre Account ID
-     - API Token : Collez votre token
-   - Sauvegardez
+4. **Configurer dans SimpleBooth**
 
 ### 🚀 Runware (Payant - Haute qualité)
 
