@@ -290,6 +290,28 @@ def review_photo():
         return redirect(url_for('index'))
     return render_template('review.html', photo=current_photo, config=config)
 
+@app.route('/api/last_photo')
+def api_last_photo():
+    """API pour récupérer le chemin de la dernière photo capturée"""
+    global current_photo
+    
+    if not current_photo:
+        return jsonify({'success': False, 'error': 'Aucune photo disponible'})
+    
+    # Vérifier si la photo existe dans photos/ ou effet/
+    if os.path.exists(os.path.join(PHOTOS_FOLDER, current_photo)):
+        photo_path = f'photos/{current_photo}'
+    elif os.path.exists(os.path.join(EFFECT_FOLDER, current_photo)):
+        photo_path = f'effet/{current_photo}'
+    else:
+        return jsonify({'success': False, 'error': 'Photo introuvable'})
+    
+    return jsonify({
+        'success': True,
+        'photo_path': photo_path,
+        'filename': current_photo
+    })
+
 @app.route('/print_photo', methods=['POST'])
 def print_photo():
     """Imprimer la photo actuelle"""

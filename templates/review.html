@@ -66,27 +66,52 @@
 
 {% block scripts %}
 <script>
-let currentPhotoPath = '';
+// Photo passée par le serveur via Jinja (source principale)
+let currentPhotoPath = '{{ photo }}' || '';
 let inactivityTimer = null;
 let inactivityDuration = 30000;
 let inactivityStartTime = null;
 let inactivityAnimationFrame = null;
 
 document.addEventListener('DOMContentLoaded', function() {
-    loadLastPhoto();
+    loadPhoto();
     setupActivityTracking();
     startInactivityTimer();
     checkTelegramConfig();
     checkPrinterConfig();
 });
 
-function loadLastPhoto() {
+function loadPhoto() {
+    const photoPreview = document.getElementById('photoPreview');
+    
+    // Utiliser la variable Jinja si disponible
+    if (currentPhotoPath) {
+        // Chercher dans photos/ puis effet/
+        photoPreview.src = '/photos/' + currentPhotoPath + '?t=' + Date.now();
+        photoPreview.onerror = function() {
+            // Si pas trouvé dans photos/, essayer effet/
+            this.src = '/effet/' + currentPhotoPath + '?t=' + Date.now();
+            this.onerror = function() {
+                console.error('Photo introuvable:', currentPhotoPath);
+                // Fallback: essayer l'API
+                loadPhotoFromAPI();
+            };
+        };
+    } else {
+        // Fallback: utiliser l'API
+        loadPhotoFromAPI();
+    }
+}
+
+function loadPhotoFromAPI() {
     fetch('/api/last_photo').then(r => r.json()).then(data => {
         if (data.success && data.photo_path) {
-            currentPhotoPath = data.photo_path;
+            currentPhotoPath = data.filename || data.photo_path;
             document.getElementById('photoPreview').src = '/' + data.photo_path + '?t=' + Date.now();
+        } else {
+            console.error('Aucune photo disponible');
         }
-    });
+    }).catch(err => console.error('Erreur API:', err));
 }
 
 function checkTelegramConfig() {
