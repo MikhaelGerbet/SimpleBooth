@@ -909,7 +909,7 @@ def get_telegram_qrcode():
         logger.info(f"[QRCODE] Utilisation du cache: {qrcode_filename}")
         return jsonify({
             'success': True,
-            'url': f'/static/qrcodes/{qrcode_filename}'
+            'qrcode_url': f'/static/qrcodes/{qrcode_filename}'
         })
     
     # Le QR Code n'existe pas, on doit le générer
@@ -966,7 +966,7 @@ def get_telegram_qrcode():
         
         return jsonify({
             'success': True,
-            'url': f'/static/qrcodes/{qrcode_filename}'
+            'qrcode_url': f'/static/qrcodes/{qrcode_filename}'
         })
         
     except ImportError:
