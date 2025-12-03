@@ -673,6 +673,55 @@
             </div>
         </div>
         
+        <!-- Configuration Sécurité -->
+        <div class="card mb-4">
+            <div class="card-header bg-dark text-white">
+                <h4 class="mb-0">
+                    <i class="fas fa-shield-alt me-2"></i>
+                    Sécurité
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-key me-2 text-warning"></i>Code PIN Admin
+                            </label>
+                            <div class="input-group">
+                                <input type="password" 
+                                       class="form-control" 
+                                       id="admin_pin" 
+                                       name="admin_pin" 
+                                       value="{{ config.admin_pin }}"
+                                       pattern="[0-9]{4,8}"
+                                       maxlength="8"
+                                       placeholder="Code PIN (4-8 chiffres)">
+                                <button class="btn btn-outline-secondary" type="button" onclick="togglePinVisibility()">
+                                    <i class="fas fa-eye" id="pinVisibilityIcon"></i>
+                                </button>
+                            </div>
+                            <div class="form-text">Code PIN pour accéder à l'administration (4 à 8 chiffres). Par défaut: 1234</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-sign-out-alt me-2 text-danger"></i>Déconnexion
+                            </label>
+                            <div>
+                                <a href="{{ url_for('logout') }}" class="btn btn-outline-danger">
+                                    <i class="fas fa-lock me-2"></i>
+                                    Se déconnecter
+                                </a>
+                            </div>
+                            <div class="form-text">Verrouiller l'accès admin et retourner à l'écran principal</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <!-- Bouton de sauvegarde -->
         <div class="text-center mb-4">
             <button type="submit" class="btn btn-success btn-lg px-5">
@@ -1242,6 +1291,21 @@ function savePrinterConfigAndRefresh() {
     .catch(error => {
         console.error('Erreur lors de la sauvegarde:', error);
     });
+}
+
+// Fonction pour basculer la visibilité du code PIN
+function togglePinVisibility() {
+    const pinInput = document.getElementById('admin_pin');
+    const icon = document.getElementById('pinVisibilityIcon');
+    if (pinInput.type === 'password') {
+        pinInput.type = 'text';
+        icon.classList.remove('fa-eye');
+        icon.classList.add('fa-eye-slash');
+    } else {
+        pinInput.type = 'password';
+        icon.classList.remove('fa-eye-slash');
+        icon.classList.add('fa-eye');
+    }
 }
 
 // Fonction pour vérifier l'état de l'imprimante

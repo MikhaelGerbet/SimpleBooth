@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from flask import Flask, render_template, request, jsonify, send_from_directory, redirect, url_for, flash, Response, abort
+from flask import Flask, render_template, request, jsonify, send_from_directory, redirect, url_for, flash, Response, abort, session
 import os
 import time
 import subprocess
@@ -13,6 +13,7 @@ import signal
 import atexit
 import base64
 import sys
+from functools import wraps
 from datetime import datetime
 from werkzeug.utils import secure_filename
 from PIL import Image
@@ -165,6 +166,49 @@ original_photo = None  # Photo originale pour régénérer les effets
 camera_active = False
 camera_process = None
 usb_camera = None
+
+# ============================================
+# AUTHENTIFICATION PAR CODE PIN
+# ============================================
+
+def require_pin(f):
+    """Décorateur pour protéger les routes admin avec le code PIN"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('admin_authenticated'):
+            return redirect(url_for('unlock'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+@app.route('/unlock')
+def unlock():
+    """Page de saisie du code PIN"""
+    # Si déjà authentifié, rediriger vers admin
+    if session.get('admin_authenticated'):
+        return redirect(url_for('admin'))
+    return render_template('unlock.html')
+
+@app.route('/verify_pin', methods=['POST'])
+def verify_pin():
+    """Vérification du code PIN"""
+    data = request.get_json()
+    entered_pin = data.get('pin', '')
+    correct_pin = config.get('admin_pin', '1234')
+    
+    if entered_pin == correct_pin:
+        session['admin_authenticated'] = True
+        session.permanent = True
+        return jsonify({'success': True})
+    else:
+        return jsonify({'success': False, 'error': 'Code incorrect'})
+
+@app.route('/logout')
+def logout():
+    """Déconnexion de l'admin"""
+    session.pop('admin_authenticated', None)
+    return redirect(url_for('index'))
+
+# ============================================
 
 @app.route('/')
 def index():
@@ -978,6 +1022,7 @@ def get_telegram_qrcode():
 
 
 @app.route('/admin')
+@require_pin
 def admin():
     # Vérifier si le dossier photos existe
     if not os.path.exists(PHOTOS_FOLDER):
@@ -1052,6 +1097,7 @@ def admin():
                            show_toast=request.args.get('show_toast', False))
 
 @app.route('/admin/save', methods=['POST'])
+@require_pin
 def save_admin_config():
     """Sauvegarder la configuration admin"""
     global config
@@ -1121,6 +1167,11 @@ def save_admin_config():
         except ValueError:
             config['print_resolution'] = 384
         
+        # Configuration sécurité
+        new_pin = request.form.get('admin_pin', '').strip()
+        if new_pin and new_pin.isdigit() and 4 <= len(new_pin) <= 8:
+            config['admin_pin'] = new_pin
+        
         save_config(config)
         flash('Configuration sauvegardée avec succès!', 'success')
         
@@ -1130,6 +1181,7 @@ def save_admin_config():
     return redirect(url_for('admin'))
 
 @app.route('/admin/delete_photos', methods=['POST'])
+@require_pin
 def delete_all_photos():
     """Supprimer toutes les photos (normales et avec effet)"""
     try:
@@ -1156,6 +1208,7 @@ def delete_all_photos():
     return redirect(url_for('admin'))
 
 @app.route('/admin/download_photo/<filename>')
+@require_pin
 def download_photo(filename):
     """Télécharger une photo spécifique"""
     try:
@@ -1172,6 +1225,7 @@ def download_photo(filename):
         return redirect(url_for('admin'))
 
 @app.route('/admin/reprint_photo/<filename>', methods=['POST'])
+@require_pin
 def reprint_photo(filename):
     """Réimprimer une photo spécifique"""
     try:

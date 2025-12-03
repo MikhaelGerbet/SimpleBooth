@@ -279,6 +279,12 @@
             </div>
         </div>
     </div>
+    
+    <!-- Bouton admin discret (triple-tap pour activer) -->
+    <div id="adminAccessZone" 
+         style="position: fixed; bottom: 0; left: 0; width: 60px; height: 60px; z-index: 50; cursor: default;"
+         onclick="handleAdminTap()">
+    </div>
 </div>
 
 <!-- Overlay écran de veille / diaporama -->
@@ -491,6 +497,27 @@ function setStyle(style) {
     videoPreview.style.filter = style === 'bw' ? 'grayscale(100%)' : 'none';
     
     closeAllPopups();
+}
+
+// Gestion du triple-tap pour accès admin
+let adminTapCount = 0;
+let adminTapTimer = null;
+
+function handleAdminTap() {
+    adminTapCount++;
+    
+    if (adminTapTimer) clearTimeout(adminTapTimer);
+    
+    // Reset après 1 seconde sans tap
+    adminTapTimer = setTimeout(() => {
+        adminTapCount = 0;
+    }, 1000);
+    
+    // Triple-tap détecté -> redirection vers unlock
+    if (adminTapCount >= 3) {
+        adminTapCount = 0;
+        window.location.href = '/unlock';
+    }
 }
 
 // Charger l'overlay actuel

@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+
+{% block title %}WizardPhotoBox - Accès Admin{% endblock %}
+
+{% block content %}
+<div class="unlock-container">
+    <style>
+        * {
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        
+        .unlock-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 1rem;
+        }
+        
+        .unlock-box {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            padding: 2rem;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 320px;
+            width: 100%;
+        }
+        
+        .lock-icon {
+            font-size: 3rem;
+            color: #ffc107;
+            margin-bottom: 1rem;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.8; }
+        }
+        
+        .unlock-title {
+            color: white;
+            font-size: 1.3rem;
+            font-weight: 300;
+            margin-bottom: 1.5rem;
+        }
+        
+        .pin-display {
+            display: flex;
+            justify-content: center;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .pin-dot {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            transition: all 0.2s ease;
+        }
+        
+        .pin-dot.filled {
+            background: #ffc107;
+            border-color: #ffc107;
+            box-shadow: 0 0 15px rgba(255, 193, 7, 0.5);
+        }
+        
+        .pin-dot.error {
+            background: #dc3545;
+            border-color: #dc3545;
+            animation: shake 0.5s ease-in-out;
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-5px); }
+            40%, 80% { transform: translateX(5px); }
+        }
+        
+        .keypad {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
+            max-width: 240px;
+            margin: 0 auto;
+        }
+        
+        .key-btn {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 1.8rem;
+            font-weight: 300;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .key-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+        
+        .key-btn:active {
+            transform: scale(0.95);
+            background: rgba(255, 193, 7, 0.3);
+            border-color: #ffc107;
+        }
+        
+        .key-btn.key-clear {
+            font-size: 1.2rem;
+            color: #dc3545;
+            border-color: rgba(220, 53, 69, 0.5);
+        }
+        
+        .key-btn.key-clear:hover {
+            background: rgba(220, 53, 69, 0.2);
+        }
+        
+        .key-btn.key-back {
+            font-size: 1.4rem;
+            color: #ffc107;
+            border-color: rgba(255, 193, 7, 0.5);
+        }
+        
+        .key-btn.key-back:hover {
+            background: rgba(255, 193, 7, 0.2);
+        }
+        
+        .back-link {
+            margin-top: 1.5rem;
+            color: rgba(255, 255, 255, 0.5);
+            text-decoration: none;
+            font-size: 0.9rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: color 0.2s;
+        }
+        
+        .back-link:hover {
+            color: rgba(255, 255, 255, 0.8);
+        }
+        
+        .error-message {
+            color: #dc3545;
+            font-size: 0.9rem;
+            margin-top: 1rem;
+            min-height: 1.5rem;
+        }
+    </style>
+    
+    <div class="unlock-box">
+        <div class="lock-icon">
+            <i class="fas fa-lock"></i>
+        </div>
+        <h2 class="unlock-title">Entrez le code PIN</h2>
+        
+        <div class="pin-display">
+            <div class="pin-dot" id="dot1"></div>
+            <div class="pin-dot" id="dot2"></div>
+            <div class="pin-dot" id="dot3"></div>
+            <div class="pin-dot" id="dot4"></div>
+        </div>
+        
+        <div class="keypad">
+            <button class="key-btn" onclick="addDigit('1')">1</button>
+            <button class="key-btn" onclick="addDigit('2')">2</button>
+            <button class="key-btn" onclick="addDigit('3')">3</button>
+            <button class="key-btn" onclick="addDigit('4')">4</button>
+            <button class="key-btn" onclick="addDigit('5')">5</button>
+            <button class="key-btn" onclick="addDigit('6')">6</button>
+            <button class="key-btn" onclick="addDigit('7')">7</button>
+            <button class="key-btn" onclick="addDigit('8')">8</button>
+            <button class="key-btn" onclick="addDigit('9')">9</button>
+            <button class="key-btn key-clear" onclick="clearPin()"><i class="fas fa-times"></i></button>
+            <button class="key-btn" onclick="addDigit('0')">0</button>
+            <button class="key-btn key-back" onclick="backspace()"><i class="fas fa-backspace"></i></button>
+        </div>
+        
+        <div class="error-message" id="errorMessage"></div>
+        
+        <a href="/" class="back-link">
+            <i class="fas fa-arrow-left"></i>
+            Retour au photobooth
+        </a>
+    </div>
+</div>
+
+<script>
+let pin = '';
+const maxLength = 4;
+
+function updateDisplay() {
+    for (let i = 1; i <= maxLength; i++) {
+        const dot = document.getElementById('dot' + i);
+        dot.classList.remove('filled', 'error');
+        if (i <= pin.length) {
+            dot.classList.add('filled');
+        }
+    }
+    document.getElementById('errorMessage').textContent = '';
+}
+
+function addDigit(digit) {
+    if (pin.length < maxLength) {
+        pin += digit;
+        updateDisplay();
+        
+        // Vérification automatique quand 4 chiffres sont entrés
+        if (pin.length === maxLength) {
+            setTimeout(verifyPin, 200);
+        }
+    }
+}
+
+function backspace() {
+    if (pin.length > 0) {
+        pin = pin.slice(0, -1);
+        updateDisplay();
+    }
+}
+
+function clearPin() {
+    pin = '';
+    updateDisplay();
+}
+
+function showError(message) {
+    const dots = document.querySelectorAll('.pin-dot');
+    dots.forEach(dot => dot.classList.add('error'));
+    document.getElementById('errorMessage').textContent = message;
+    
+    setTimeout(() => {
+        pin = '';
+        updateDisplay();
+    }, 800);
+}
+
+function verifyPin() {
+    fetch('/verify_pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: pin })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            // Animation de succès puis redirection
+            const dots = document.querySelectorAll('.pin-dot');
+            dots.forEach(dot => {
+                dot.style.background = '#28a745';
+                dot.style.borderColor = '#28a745';
+            });
+            setTimeout(() => {
+                window.location.href = '/admin';
+            }, 300);
+        } else {
+            showError('Code incorrect');
+        }
+    })
+    .catch(() => {
+        showError('Erreur de connexion');
+    });
+}
+
+// Support clavier physique
+document.addEventListener('keydown', function(e) {
+    if (e.key >= '0' && e.key <= '9') {
+        addDigit(e.key);
+    } else if (e.key === 'Backspace') {
+        backspace();
+    } else if (e.key === 'Escape') {
+        clearPin();
+    } else if (e.key === 'Enter' && pin.length === maxLength) {
+        verifyPin();
+    }
+});
+</script>
+{% endblock %}

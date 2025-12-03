@@ -33,7 +33,8 @@ DEFAULT_CONFIG = {
     'paper_size': '4x6',
     'printer_port': '/dev/ttyAMA0',
     'printer_baudrate': 9600,
-    'print_resolution': 384
+    'print_resolution': 384,
+    'admin_pin': '1234'
 }
 
 logger = logging.getLogger(__name__)
