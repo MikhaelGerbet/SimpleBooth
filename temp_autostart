@@ -1,0 +1,10 @@
+#!/bin/bash
+export XDG_RUNTIME_DIR=/run/user/1000
+export WAYLAND_DISPLAY=wayland-0
+sleep 1
+wlr-randr --output DSI-2 --transform 180
+sleep 1
+# Cacher le curseur
+unclutter --timeout 0 --jitter 0 --hide-on-touch &
+sleep 1
+chromium-browser --kiosk --password-store=basic --disable-translate --disable-features=Translate,TranslateUI,LockProfileCookieDatabase --no-first-run --disable-infobars --noerrdialogs --disable-session-crashed-bubble --disable-component-update --disable-popup-blocking --disable-default-apps --lang=fr http://localhost:5000 &
