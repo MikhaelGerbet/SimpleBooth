@@ -110,7 +110,61 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## 🖨️ Configuration de l'imprimante Canon SELPHY CP1500
+## � Configuration WiFi avec Hotspot de Secours
+
+Pour garantir une connexion internet permanente (important pour Telegram et les effets IA), vous pouvez configurer un WiFi de secours qui bascule automatiquement sur le partage de connexion de votre téléphone si le WiFi principal est indisponible.
+
+### Configuration automatique
+
+```bash
+# Rendre le script exécutable
+chmod +x wifi_setup.sh
+
+# Lancer la configuration
+sudo ./wifi_setup.sh
+```
+
+Le script vous demandera :
+1. **SSID et mot de passe du WiFi principal** (ex: votre box internet)
+2. **SSID et mot de passe du hotspot téléphone** (partage de connexion mobile)
+
+### Comportement
+
+| Situation | Action automatique |
+|-----------|-------------------|
+| WiFi principal disponible | Connexion prioritaire |
+| WiFi principal indisponible | Bascule sur hotspot téléphone |
+| WiFi principal revient | Retour automatique au principal |
+
+### Configuration manuelle (wpa_supplicant)
+
+Si vous préférez configurer manuellement :
+
+```bash
+sudo nano /etc/wpa_supplicant/wpa_supplicant.conf
+```
+
+```conf
+country=FR
+ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
+update_config=1
+
+# WiFi principal (priorité haute)
+network={
+    ssid="NomDeVotreBox"
+    psk="MotDePasseBox"
+    priority=10
+}
+
+# Hotspot téléphone (priorité basse = secours)
+network={
+    ssid="iPhone de Jean"
+    psk="MotDePasseHotspot"
+    priority=5
+}
+```
+
+## �🖨️ Configuration de l'imprimante Canon SELPHY CP1500
 
 ### Installation CUPS
 

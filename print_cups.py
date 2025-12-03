@@ -116,7 +116,14 @@ def fix_image_orientation(img):
 def prepare_image_for_selphy(image_path, paper_size='4x6'):
     """
     Préparer l'image pour impression sur Canon SELPHY CP1500.
-    Format carte postale 4x6 pouces (100x148mm) à 300 DPI.
+    
+    Format carte postale 10x15 cm (100x148mm) à 300 DPI.
+    Zone d'impression EXACTE de la SELPHY CP1500:
+    - Largeur: 100mm = 1182 pixels @ 300 DPI
+    - Hauteur: 148mm = 1748 pixels @ 300 DPI
+    
+    Pour éviter tout débordement, on utilise ces dimensions exactes.
+    L'image est redimensionnée pour REMPLIR la zone (crop centré si nécessaire).
     """
     try:
         img = Image.open(image_path)
@@ -138,64 +145,96 @@ def prepare_image_for_selphy(image_path, paper_size='4x6'):
         elif img.mode != 'RGB':
             img = img.convert('RGB')
         
-        # Dimensions pour Canon SELPHY CP1500 à 300 DPI
-        # Format carte postale 4x6" = 100x148mm = 1200x1800 pixels à 300 DPI
+        # ========================================
+        # DIMENSIONS EXACTES Canon SELPHY CP1500
+        # ========================================
+        # Format carte postale (Postcard/P size):
+        # - Dimensions physiques: 100 x 148 mm
+        # - À 300 DPI: 1182 x 1748 pixels (exact)
+        # - Ratio: 1.479 (proche de 3:2 = 1.5)
+        #
+        # Pour éviter TOUT débordement, on calcule les pixels exacts:
+        # 100mm × (300/25.4) = 1181.1 → 1182 pixels
+        # 148mm × (300/25.4) = 1748.0 → 1748 pixels
+        
         paper_sizes = {
-            '4x6': (1800, 1200),      # Paysage: 6x4 pouces (1800x1200)
-            'credit-card': (1024, 642),  # Format carte de crédit
-            'square': (1200, 1200),    # Carré
+            '4x6': (1748, 1182),      # Paysage: 148x100 mm (SELPHY CP1500 exact)
+            '10x15': (1748, 1182),    # Alias pour 4x6
+            'credit-card': (642, 1024),  # Format carte de crédit (vertical)
+            'square': (1182, 1182),    # Carré 100x100mm
         }
         
-        target_width, target_height = paper_sizes.get(paper_size, (1800, 1200))
+        target_width, target_height = paper_sizes.get(paper_size, (1748, 1182))
+        target_ratio = target_width / target_height  # ~1.479 pour 4x6
         
-        # Déterminer l'orientation optimale
-        img_ratio = img.width / img.height
-        target_ratio = target_width / target_height
+        print(f"📐 Format papier: {paper_size} → {target_width}x{target_height}px (ratio {target_ratio:.3f})")
         
-        # Si l'image est en portrait et le papier en paysage, pivoter
-        if img.height > img.width and target_width > target_height:
+        # Déterminer si l'image est en portrait ou paysage
+        img_is_landscape = img.width >= img.height
+        target_is_landscape = target_width >= target_height
+        
+        # Pivoter si nécessaire pour correspondre à l'orientation cible
+        if img_is_landscape != target_is_landscape:
             img = img.rotate(90, expand=True)
-        elif img.width > img.height and target_height > target_width:
-            img = img.rotate(90, expand=True)
+            print(f"🔄 Image pivotée pour correspondre au format papier")
         
-        # Recalculer après rotation
+        # Recalculer le ratio après rotation
         img_ratio = img.width / img.height
         
-        # Calculer les dimensions pour remplir le papier (crop au centre)
+        print(f"🖼️  Image source: {img.width}x{img.height}px (ratio {img_ratio:.3f})")
+        
+        # Calculer les dimensions pour REMPLIR le papier (cover, pas contain)
+        # Cela signifie qu'on peut cropper un peu si les ratios ne correspondent pas
         if img_ratio > target_ratio:
-            # Image plus large proportionnellement
+            # Image plus large proportionnellement → on ajuste sur la hauteur
             new_height = target_height
             new_width = int(target_height * img_ratio)
         else:
-            # Image plus haute proportionnellement
+            # Image plus haute proportionnellement → on ajuste sur la largeur
             new_width = target_width
             new_height = int(target_width / img_ratio)
         
-        # Redimensionner avec haute qualité
+        # Redimensionner avec haute qualité (LANCZOS = meilleur pour réduction)
         img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
         
-        # Centrer et rogner pour obtenir les dimensions exactes
+        print(f"📏 Après redimensionnement: {new_width}x{new_height}px")
+        
+        # Centrer et rogner pour obtenir les dimensions EXACTES du papier
         left = (new_width - target_width) // 2
         top = (new_height - target_height) // 2
-        img = img.crop((left, top, left + target_width, top + target_height))
+        right = left + target_width
+        bottom = top + target_height
         
-        # Améliorer légèrement les couleurs pour l'impression
+        img = img.crop((left, top, right, bottom))
+        
+        print(f"✂️  Après crop centré: {img.width}x{img.height}px (EXACT)")
+        
+        # Vérification de sécurité
+        if img.width != target_width or img.height != target_height:
+            print(f"⚠️  ATTENTION: Dimensions finales incorrectes!")
+            # Forcer les dimensions exactes
+            img = img.resize((target_width, target_height), Image.Resampling.LANCZOS)
+        
+        # Améliorer légèrement les couleurs pour l'impression photo
         enhancer = ImageEnhance.Color(img)
-        img = enhancer.enhance(1.05)  # Légère saturation
+        img = enhancer.enhance(1.05)  # Légère saturation (+5%)
         
         enhancer = ImageEnhance.Contrast(img)
-        img = enhancer.enhance(1.02)  # Léger contraste
+        img = enhancer.enhance(1.02)  # Léger contraste (+2%)
         
-        # Sauvegarder en JPEG haute qualité
+        # Sauvegarder en JPEG haute qualité avec les métadonnées DPI
         temp_file = tempfile.NamedTemporaryFile(suffix='.jpg', delete=False)
         img.save(temp_file.name, 'JPEG', quality=98, dpi=(300, 300))
         
-        print(f"📐 Image préparée: {target_width}x{target_height} pixels (300 DPI)")
+        print(f"✅ Image prête: {target_width}x{target_height}px @ 300 DPI")
+        print(f"📁 Fichier temporaire: {temp_file.name}")
         
         return temp_file.name
         
     except Exception as e:
         print(f"❌ Erreur préparation image: {e}")
+        import traceback
+        traceback.print_exc()
         return image_path
 
 

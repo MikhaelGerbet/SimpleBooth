@@ -222,14 +222,16 @@ def capture_photo():
                 original_photo = filename
                 return jsonify({'success': True, 'filename': filename})
             
-            # Capture haute résolution pour impression 10x15 cm @ 300dpi
-            # Résolution: 1800x1200 minimum, on prend 2400x1600 pour marge
-            # Ou max: 4608x2592 pour la meilleure qualité
+            # Capture haute résolution pour impression Canon SELPHY CP1500
+            # Format carte postale 10x15cm (100x148mm) @ 300 DPI
+            # Dimensions exactes: 1182 x 1748 pixels
+            # On capture en plus haute résolution pour qualité, ratio 148:100 = 1.48
+            # 2220 x 1500 serait exact, mais on prend un peu plus large pour crop ultérieur
             cmd = [
                 still_cmd,
                 '--output', filepath,
-                '--width', '2400',      # Largeur optimale pour 10x15 @ 300dpi
-                '--height', '1600',     # Hauteur optimale (ratio 3:2 = 10x15)
+                '--width', '2244',      # 1748 * 1.284 (marge de qualité)
+                '--height', '1518',     # 1182 * 1.284 (même ratio 1.478)
                 '--quality', '95',      # Qualité JPEG élevée
                 '--immediate',          # Capture immédiate sans délai
                 '--nopreview',          # Pas d'aperçu
@@ -553,10 +555,19 @@ async def apply_effect_runware(photo_path):
 # GESTION DES OVERLAYS
 # ============================================
 
+# Dimensions exactes pour Canon SELPHY CP1500 @ 300 DPI
+# Format carte postale 10x15cm (100x148mm)
+SELPHY_WIDTH = 1748   # 148mm @ 300 DPI
+SELPHY_HEIGHT = 1182  # 100mm @ 300 DPI
+SELPHY_RATIO = SELPHY_WIDTH / SELPHY_HEIGHT  # ~1.479
+
 def apply_overlay(photo_path, output_path=None):
     """
     Appliquer l'overlay actuel sur une photo.
-    L'overlay est redimensionné pour correspondre à la taille de la photo.
+    
+    L'overlay ET la photo sont redimensionnés aux dimensions exactes 
+    de la Canon SELPHY CP1500 (1748x1182 pixels) pour garantir 
+    un alignement parfait à l'impression.
     
     Args:
         photo_path: Chemin de la photo source
@@ -582,11 +593,36 @@ def apply_overlay(photo_path, output_path=None):
         photo = Image.open(photo_path).convert('RGBA')
         overlay = Image.open(overlay_path).convert('RGBA')
         
-        # Redimensionner l'overlay pour correspondre à la taille de la photo
-        overlay_resized = overlay.resize(photo.size, Image.Resampling.LANCZOS)
+        logger.info(f"[OVERLAY] Photo originale: {photo.size}, Overlay: {overlay.size}")
+        
+        # Redimensionner la photo aux dimensions SELPHY avec crop centré
+        photo_ratio = photo.width / photo.height
+        
+        if photo_ratio > SELPHY_RATIO:
+            # Photo plus large → on ajuste sur la hauteur et on crop les côtés
+            new_height = SELPHY_HEIGHT
+            new_width = int(SELPHY_HEIGHT * photo_ratio)
+        else:
+            # Photo plus haute → on ajuste sur la largeur et on crop haut/bas
+            new_width = SELPHY_WIDTH
+            new_height = int(SELPHY_WIDTH / photo_ratio)
+        
+        photo_resized = photo.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        
+        # Crop centré aux dimensions exactes SELPHY
+        left = (new_width - SELPHY_WIDTH) // 2
+        top = (new_height - SELPHY_HEIGHT) // 2
+        photo_cropped = photo_resized.crop((left, top, left + SELPHY_WIDTH, top + SELPHY_HEIGHT))
+        
+        logger.info(f"[OVERLAY] Photo après crop: {photo_cropped.size}")
+        
+        # Redimensionner l'overlay aux dimensions SELPHY exactes
+        overlay_resized = overlay.resize((SELPHY_WIDTH, SELPHY_HEIGHT), Image.Resampling.LANCZOS)
+        
+        logger.info(f"[OVERLAY] Overlay redimensionné: {overlay_resized.size}")
         
         # Superposer l'overlay sur la photo
-        photo_with_overlay = Image.alpha_composite(photo, overlay_resized)
+        photo_with_overlay = Image.alpha_composite(photo_cropped, overlay_resized)
         
         # Convertir en RGB pour sauvegarder en JPEG
         photo_with_overlay_rgb = photo_with_overlay.convert('RGB')
@@ -595,14 +631,16 @@ def apply_overlay(photo_path, output_path=None):
         if output_path is None:
             output_path = photo_path
         
-        # Sauvegarder
-        photo_with_overlay_rgb.save(output_path, 'JPEG', quality=95)
-        logger.info(f"[OVERLAY] Overlay appliqué: {current_overlay} sur {photo_path}")
+        # Sauvegarder avec DPI correct pour impression
+        photo_with_overlay_rgb.save(output_path, 'JPEG', quality=95, dpi=(300, 300))
+        logger.info(f"[OVERLAY] Overlay appliqué: {current_overlay} → {SELPHY_WIDTH}x{SELPHY_HEIGHT}px")
         
         return output_path
         
     except Exception as e:
         logger.error(f"[OVERLAY] Erreur lors de l'application de l'overlay: {e}")
+        import traceback
+        traceback.print_exc()
         return photo_path
 
 
