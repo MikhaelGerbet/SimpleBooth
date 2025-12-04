@@ -391,8 +391,8 @@
             <span id="slideshowCounter">Photo 1 sur 10</span>
         </div>
         
-        <!-- Bouton capture toujours visible -->
-        <button class="screensaver-capture-btn" onclick="exitScreensaverAndCapture()">
+        <!-- Bouton pour sortir du diaporama -->
+        <button class="screensaver-capture-btn" onclick="stopSlideshow()">
             <i class="fas fa-camera me-3"></i>
             PRENDRE UNE PHOTO
         </button>
@@ -410,12 +410,14 @@ let currentOverlayUrl = '';
 let selectedTimer = {{ config.timer_seconds | default(5) }};
 let selectedStyle = 'color';
 let activePopup = null;
+let cameraWatchdogInterval = null;
 
 // Initialiser au chargement
 document.addEventListener('DOMContentLoaded', function() {
     initCamera();
     loadOverlayPreview();
     initOptions();
+    startCameraWatchdog();
     
     // Fermer les popups si on clique ailleurs
     document.addEventListener('click', function(e) {
@@ -426,6 +428,32 @@ document.addEventListener('DOMContentLoaded', function() {
     
     setInterval(loadOverlayPreview, 5000);
 });
+
+// Watchdog pour détecter et redémarrer la caméra figée
+function startCameraWatchdog() {
+    cameraWatchdogInterval = setInterval(async () => {
+        try {
+            const response = await fetch('/api/camera_status');
+            const status = await response.json();
+            
+            // Si pas de frame depuis plus de 5 secondes, redémarrer
+            if (!status.active && status.last_frame_age > 5) {
+                console.log('[WATCHDOG] Caméra figée détectée, redémarrage...');
+                await fetch('/api/restart_camera', { method: 'POST' });
+                
+                // Recharger le flux vidéo après 2 secondes
+                setTimeout(() => {
+                    const videoPreview = document.getElementById('videoPreview');
+                    if (videoPreview) {
+                        videoPreview.src = '/video_stream?t=' + Date.now();
+                    }
+                }, 2000);
+            }
+        } catch (e) {
+            console.log('[WATCHDOG] Erreur vérification caméra:', e);
+        }
+    }, 10000); // Vérifier toutes les 10 secondes
+}
 
 // Toggle popup
 function togglePopup(popupId) {

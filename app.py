@@ -218,6 +218,33 @@ def index():
 # Variable globale pour stocker la dernière frame MJPEG
 last_frame = None
 frame_lock = threading.Lock()
+last_frame_time = 0  # Timestamp de la dernière frame reçue
+
+@app.route('/api/restart_camera', methods=['POST'])
+def restart_camera():
+    """Redémarrer le flux caméra en cas de problème"""
+    global camera_process
+    try:
+        logger.info("[CAMERA] Redémarrage demandé...")
+        stop_camera_process()
+        # Tuer tous les processus caméra résiduels
+        subprocess.run(['pkill', '-f', 'libcamera'], capture_output=True)
+        subprocess.run(['pkill', '-f', 'rpicam'], capture_output=True)
+        time.sleep(1)
+        return jsonify({'success': True, 'message': 'Caméra redémarrée'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/camera_status')
+def camera_status():
+    """Vérifier si la caméra envoie des frames"""
+    global last_frame_time
+    current_time = time.time()
+    is_active = (current_time - last_frame_time) < 3  # Frame reçue dans les 3 dernières secondes
+    return jsonify({
+        'active': is_active,
+        'last_frame_age': current_time - last_frame_time if last_frame_time > 0 else -1
+    })
 
 @app.route('/capture', methods=['POST'])
 def capture_photo():
@@ -1224,6 +1251,38 @@ def download_photo(filename):
         flash(f'Erreur lors du téléchargement: {str(e)}', 'error')
         return redirect(url_for('admin'))
 
+@app.route('/admin/delete_photo/<filename>', methods=['POST'])
+@require_pin
+def delete_single_photo(filename):
+    """Supprimer une photo individuelle"""
+    try:
+        data = request.get_json() or {}
+        photo_type = data.get('type', 'photo')
+        
+        # Déterminer le dossier selon le type
+        if photo_type == 'effet':
+            photo_path = os.path.join(EFFECT_FOLDER, filename)
+        else:
+            photo_path = os.path.join(PHOTOS_FOLDER, filename)
+        
+        # Si pas trouvé, chercher dans l'autre dossier
+        if not os.path.exists(photo_path):
+            if photo_type == 'effet':
+                photo_path = os.path.join(PHOTOS_FOLDER, filename)
+            else:
+                photo_path = os.path.join(EFFECT_FOLDER, filename)
+        
+        if os.path.exists(photo_path):
+            os.remove(photo_path)
+            logger.info(f"Photo supprimée: {photo_path}")
+            return jsonify({'success': True, 'message': 'Photo supprimée'})
+        else:
+            return jsonify({'success': False, 'error': 'Photo introuvable'})
+            
+    except Exception as e:
+        logger.error(f"Erreur suppression photo: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
 @app.route('/admin/reprint_photo/<filename>', methods=['POST'])
 @require_pin
 def reprint_photo(filename):
@@ -1422,8 +1481,10 @@ def generate_video_stream():
                         buffer = buffer[end + 2:]
                         
                         # Stocker la frame pour capture instantanée
+                        global last_frame_time
                         with frame_lock:
                             last_frame = jpeg_frame
+                            last_frame_time = time.time()
                         
                         # Envoyer la frame au navigateur
                         yield (b'--frame\r\n'

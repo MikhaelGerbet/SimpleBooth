@@ -9,6 +9,10 @@
         overflow: auto !important;
         height: auto !important;
     }
+    /* Afficher le curseur sur l'admin */
+    *, html, body {
+        cursor: auto !important;
+    }
 </style>
 
 <!-- Toast de confirmation -->
@@ -35,7 +39,7 @@
         
         <!-- Navigation -->
         <div class="mb-4">
-            <a href="{{ url_for('index') }}" class="btn btn-primary">
+            <a href="{{ url_for('logout') }}" class="btn btn-primary">
                 <i class="fas fa-arrow-left me-2"></i>
                 Retour au WizardPhotoBox
             </a>
@@ -707,15 +711,11 @@
                     <div class="col-md-6">
                         <div class="mb-3">
                             <label class="form-label fw-bold">
-                                <i class="fas fa-sign-out-alt me-2 text-danger"></i>Déconnexion
+                                <i class="fas fa-info-circle me-2 text-info"></i>Information
                             </label>
-                            <div>
-                                <a href="{{ url_for('logout') }}" class="btn btn-outline-danger">
-                                    <i class="fas fa-lock me-2"></i>
-                                    Se déconnecter
-                                </a>
+                            <div class="alert alert-info mb-0">
+                                <small>Le bouton "Retour au WizardPhotoBox" vous déconnecte automatiquement de l'admin.</small>
                             </div>
-                            <div class="form-text">Verrouiller l'accès admin et retourner à l'écran principal</div>
                         </div>
                     </div>
                 </div>
@@ -766,6 +766,7 @@
                                     <th>Type</th>
                                     <th>Date</th>
                                     <th>Taille</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -808,6 +809,13 @@
                                     </td>
                                     <td>{{ photo.date }}</td>
                                     <td>{{ "%.1f"|format(photo.size_kb) }} KB</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-danger" 
+                                                onclick="deletePhoto('{{ photo.filename }}', '{{ photo.type }}')"
+                                                title="Supprimer cette photo">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -1030,6 +1038,32 @@
 
 {% block scripts %}
 <script>
+// Fonction pour supprimer une photo individuelle
+function deletePhoto(filename, type) {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer cette photo ?\n\n' + filename)) {
+        return;
+    }
+    
+    fetch('/admin/delete_photo/' + encodeURIComponent(filename), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: type })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Recharger la page pour mettre à jour la liste
+            location.reload();
+        } else {
+            alert('Erreur: ' + (data.error || 'Impossible de supprimer la photo'));
+        }
+    })
+    .catch(err => {
+        alert('Erreur de connexion');
+        console.error(err);
+    });
+}
+
 // Fonctions de gestion des photos
 function openPhotoModal(element) {
     const filename = element.dataset.filename;

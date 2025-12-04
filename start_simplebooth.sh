@@ -11,9 +11,10 @@ wlr-randr --output DSI-2 --transform 180
 # Désactiver l'économiseur d'écran
 xset s off -dpms 2>/dev/null || true
 
-# Cacher le curseur
-pkill unclutter 2>/dev/null
-unclutter --timeout 0 --jitter 0 --hide-on-touch &
+# Nettoyer les processus caméra résiduels
+pkill -f libcamera 2>/dev/null
+pkill -f rpicam 2>/dev/null
+sleep 1
 
 # Lancer l'application Flask
 cd "/home/pi/SimpleBooth"
