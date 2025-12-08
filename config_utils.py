@@ -24,6 +24,7 @@ DEFAULT_CONFIG = {
     'telegram_enabled': False,
     'telegram_bot_token': '',
     'telegram_chat_id': '',
+    'telegram_invite_link': '',  # Lien d'invitation manuel (optionnel)
     'telegram_send_type': 'photos',
     'camera_type': 'picamera',
     'usb_camera_id': 0,

@@ -34,7 +34,9 @@
     .qr-content h3 { color: #333; margin-bottom: 1rem; font-size: 1.8rem; }
     .qr-content p { color: #666; margin-bottom: 1.5rem; font-size: 1.1rem; }
     .qr-content img { pointer-events: auto; max-width: 280px; max-height: 280px; }
-    .qr-close-btn { margin-top: 1.5rem; padding: 1rem 2.5rem; font-size: 1.2rem; background: #dc3545; color: white; border: none; border-radius: 50px; cursor: pointer; transition: all 0.2s; }
+    .qr-close-btn { margin-top: 1.5rem; padding: 1rem 2.5rem; font-size: 1.2rem; background: #28a745; color: white; border: none; border-radius: 50px; cursor: pointer; transition: all 0.2s; }
+    .print-status { font-size: 1.3rem; color: #28a745; margin-bottom: 1rem; }
+    .print-status i { margin-right: 0.5rem; }
     .status-indicator { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); padding: 0.75rem 1.5rem; border-radius: 30px; color: white; font-size: 0.9rem; z-index: 10; backdrop-filter: blur(10px); display: none; }
     .status-indicator.show { display: block; }
     .inactivity-bar { position: absolute; bottom: 0; left: 0; height: 4px; background: linear-gradient(90deg, #dc3545, #ff6b7a); width: 100%; transform-origin: left; }
@@ -63,6 +65,24 @@
             <div id="qrLoading" style="padding: 2rem;"><i class="fas fa-spinner fa-spin fa-3x" style="color: #0088cc;"></i><p style="margin-top: 1rem; color: #666;">Chargement du QR Code...</p></div>
             <div id="qrError" style="display: none; padding: 2rem; color: #dc3545;"><i class="fas fa-exclamation-triangle fa-3x"></i><p style="margin-top: 1rem;">Impossible de generer le QR Code.</p></div>
             <br><button class="qr-close-btn" onclick="closeQRPopup()"><i class="fas fa-check me-2"></i>Fermer</button>
+        </div>
+    </div>
+    <!-- Modal Impression avec QR Code -->
+    <div class="qr-popup" id="printPopup">
+        <div class="qr-content">
+            <div id="printStatusArea">
+                <h3><i class="fas fa-print me-2" style="color: #28a745;"></i>Impression</h3>
+                <div class="print-status" id="printStatus">
+                    <i class="fas fa-spinner fa-spin"></i> Envoi à l'imprimante...
+                </div>
+            </div>
+            <hr style="margin: 1.5rem 0; border-color: #eee;">
+            <h4 style="color: #0088cc; margin-bottom: 0.5rem;"><i class="fab fa-telegram me-2"></i>Récupérez vos photos</h4>
+            <p style="color: #666; font-size: 0.95rem;">Scannez pour voir et télécharger toutes vos photos</p>
+            <img id="printQrCodeImage" src="" alt="QR Code Telegram" style="display: none;">
+            <div id="printQrLoading" style="padding: 1rem;"><i class="fas fa-spinner fa-spin fa-2x" style="color: #0088cc;"></i></div>
+            <div id="printQrError" style="display: none; padding: 1rem; color: #999;"><i class="fas fa-info-circle"></i> QR Code non disponible</div>
+            <br><button class="qr-close-btn" onclick="closePrintPopup()"><i class="fas fa-check me-2"></i>Terminé</button>
         </div>
     </div>
 </div>
@@ -211,9 +231,53 @@ function animateInactivityBar() {
 
 function printPhoto() {
     if (!currentPhotoPath) { showStatus('Aucune photo'); return; }
-    showStatus('Impression en cours...');
+    
+    // Afficher la modal d'impression
+    const popup = document.getElementById('printPopup');
+    popup.classList.add('show');
+    
+    // Reset l'état
+    document.getElementById('printStatus').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Envoi à l\'imprimante...';
+    document.getElementById('printQrCodeImage').style.display = 'none';
+    document.getElementById('printQrLoading').style.display = 'block';
+    document.getElementById('printQrError').style.display = 'none';
+    
+    // Lancer l'impression
     fetch('/print_photo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ photo_path: currentPhotoPath }) })
-        .then(r => r.json()).then(data => showStatus(data.success ? 'Envoyé à l\'imprimante !' : data.error));
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('printStatus').innerHTML = '<i class="fas fa-check-circle" style="color: #28a745;"></i> Envoyé à l\'imprimante !';
+            } else {
+                document.getElementById('printStatus').innerHTML = '<i class="fas fa-exclamation-circle" style="color: #dc3545;"></i> ' + (data.error || 'Erreur');
+            }
+        })
+        .catch(err => {
+            document.getElementById('printStatus').innerHTML = '<i class="fas fa-exclamation-circle" style="color: #dc3545;"></i> Erreur de connexion';
+        });
+    
+    // Charger le QR Code en parallèle
+    fetch('/api/telegram/qrcode')
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('printQrLoading').style.display = 'none';
+            if (data.success && data.qrcode_url) {
+                document.getElementById('printQrCodeImage').src = data.qrcode_url + '?t=' + Date.now();
+                document.getElementById('printQrCodeImage').style.display = 'block';
+            } else {
+                document.getElementById('printQrError').style.display = 'block';
+            }
+        })
+        .catch(() => {
+            document.getElementById('printQrLoading').style.display = 'none';
+            document.getElementById('printQrError').style.display = 'block';
+        });
+    
+    resetInactivityTimer();
+}
+
+function closePrintPopup() {
+    document.getElementById('printPopup').classList.remove('show');
     resetInactivityTimer();
 }
 

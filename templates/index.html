@@ -219,7 +219,7 @@
         <!-- Preview 100% hauteur, ratio 15:10 -->
         <div class="video-wrapper">
             <img id="videoPreview" 
-                 src="{{ url_for('video_stream') }}" 
+                 src="/static/camera-placeholder.svg" 
                  alt="Flux vidéo caméra">
             
             <img id="overlayPreview" 
@@ -410,14 +410,16 @@ let currentOverlayUrl = '';
 let selectedTimer = {{ config.timer_seconds | default(5) }};
 let selectedStyle = 'color';
 let activePopup = null;
-let cameraWatchdogInterval = null;
 
 // Initialiser au chargement
 document.addEventListener('DOMContentLoaded', function() {
-    initCamera();
+    // Attendre un peu avant de charger le flux (éviter race condition au démarrage)
+    setTimeout(() => {
+        initCamera();
+    }, 1000);
+    
     loadOverlayPreview();
     initOptions();
-    startCameraWatchdog();
     
     // Fermer les popups si on clique ailleurs
     document.addEventListener('click', function(e) {
@@ -428,33 +430,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     setInterval(loadOverlayPreview, 5000);
 });
-
-// Watchdog pour détecter et redémarrer la caméra figée
-function startCameraWatchdog() {
-    cameraWatchdogInterval = setInterval(async () => {
-        try {
-            const response = await fetch('/api/camera_status');
-            const status = await response.json();
-            
-            // Si pas de frame depuis plus de 5 secondes OU si jamais de frame reçue
-            if (!status.active || status.last_frame_age < 0 || status.last_frame_age > 5) {
-                console.log('[WATCHDOG] Caméra inactive détectée (age:', status.last_frame_age, '), redémarrage...');
-                await fetch('/api/restart_camera', { method: 'POST' });
-                
-                // Recharger le flux vidéo après 2 secondes
-                setTimeout(() => {
-                    const videoPreview = document.getElementById('videoPreview');
-                    if (videoPreview) {
-                        console.log('[WATCHDOG] Rechargement du flux vidéo...');
-                        videoPreview.src = '/video_stream?t=' + Date.now();
-                    }
-                }, 2000);
-            }
-        } catch (e) {
-            console.log('[WATCHDOG] Erreur vérification caméra:', e);
-        }
-    }, 5000); // Vérifier toutes les 5 secondes (plus réactif)
-}
 
 // Toggle popup
 function togglePopup(popupId) {
@@ -573,49 +548,27 @@ function loadOverlayPreview() {
 }
 
 let cameraRetryCount = 0;
-const MAX_CAMERA_RETRIES = 5;
+const MAX_CAMERA_RETRIES = 3;
 
 function initCamera() {
     try {
-        console.log('Initialisation du flux vidéo caméra...');
+        console.log('[CAMERA] Initialisation du flux vidéo caméra...');
         
         const videoPreview = document.getElementById('videoPreview');
         
-        // Gérer les erreurs de chargement du flux avec retry automatique
-        videoPreview.onerror = function() {
-            console.error('Erreur de chargement du flux vidéo, retry', cameraRetryCount + 1);
-            cameraRetryCount++;
-            
-            if (cameraRetryCount <= MAX_CAMERA_RETRIES) {
-                // Retry après un délai croissant
-                setTimeout(() => {
-                    console.log('[CAMERA] Tentative de reconnexion...');
-                    fetch('/api/restart_camera', { method: 'POST' })
-                        .then(() => {
-                            setTimeout(() => {
-                                videoPreview.src = '/video_stream?t=' + Date.now();
-                            }, 2000);
-                        });
-                }, cameraRetryCount * 1000);
-            } else {
-                showCameraError();
-            }
-        };
-        
-        // Gérer le chargement réussi
-        videoPreview.onload = function() {
-            console.log('Flux vidéo caméra démarré avec succès');
-            cameraRetryCount = 0; // Reset du compteur
-        };
-        
-        // Démarrer le flux via l'API
+        // Démarrer le flux via l'API puis charger dans l'img
         fetch('/start_camera')
             .then(response => response.json())
             .then(data => {
-                console.log('Caméra initialisée:', data.status);
+                console.log('[CAMERA] Caméra initialisée:', data.status);
+                // Charger le flux après confirmation du serveur
+                setTimeout(() => {
+                    console.log('[CAMERA] Chargement du flux vidéo...');
+                    videoPreview.src = '/video_stream?t=' + Date.now();
+                }, 500);
             })
             .catch(error => {
-                console.error('Erreur d\'initialisation caméra:', error);
+                console.error('[CAMERA] Erreur d\'initialisation caméra:', error);
             });
         
     } catch (error) {
@@ -832,6 +785,13 @@ function stopSlideshow() {
     if (slideshowProgressInterval) {
         clearInterval(slideshowProgressInterval);
         slideshowProgressInterval = null;
+    }
+    
+    // Forcer le rechargement du flux vidéo caméra (simple, une seule fois)
+    const videoPreview = document.getElementById('videoPreview');
+    if (videoPreview) {
+        console.log('[SLIDESHOW] Rechargement du flux caméra...');
+        videoPreview.src = '/video_stream?t=' + Date.now();
     }
     
     // Redémarrer le timer d'inactivité

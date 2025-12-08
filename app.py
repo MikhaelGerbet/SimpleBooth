@@ -976,6 +976,7 @@ def get_telegram_qrcode():
     
     chat_id = config.get('telegram_chat_id', '')
     bot_token = config.get('telegram_bot_token', '')
+    telegram_invite_link = config.get('telegram_invite_link', '')  # Lien manuel optionnel
     
     if not chat_id or not bot_token:
         return jsonify({'success': False, 'error': 'Configuration Telegram incomplète'})
@@ -1000,12 +1001,16 @@ def get_telegram_qrcode():
         
         invite_link = None
         
-        # Si le chat_id commence par @, c'est un username public
-        if chat_id.startswith('@'):
+        # 1. Utiliser le lien manuel s'il est configuré
+        if telegram_invite_link:
+            invite_link = telegram_invite_link
+            logger.info(f"[QRCODE] Utilisation du lien manuel: {invite_link}")
+        # 2. Si le chat_id commence par @, c'est un username public
+        elif chat_id.startswith('@'):
             invite_link = f'https://t.me/{chat_id[1:]}'
             logger.info(f"[QRCODE] Canal public détecté: {invite_link}")
         else:
-            # Sinon, on essaie de récupérer le lien d'invitation via l'API
+            # 3. Sinon, on essaie de récupérer le lien d'invitation via l'API
             try:
                 api_url = f'https://api.telegram.org/bot{bot_token}/exportChatInviteLink'
                 response = requests.post(api_url, json={'chat_id': chat_id}, timeout=10)
@@ -1170,6 +1175,7 @@ def save_admin_config():
         config['telegram_enabled'] = 'telegram_enabled' in request.form
         config['telegram_bot_token'] = request.form.get('telegram_bot_token', '')
         config['telegram_chat_id'] = request.form.get('telegram_chat_id', '')
+        config['telegram_invite_link'] = request.form.get('telegram_invite_link', '')
         config['telegram_send_type'] = request.form.get('telegram_send_type', 'photos')
         
         # Configuration de la caméra

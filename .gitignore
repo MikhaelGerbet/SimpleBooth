@@ -66,3 +66,7 @@ Thumbs.db
 
 # Logs
 *.log
+
+
+overlays/*
+master

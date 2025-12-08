@@ -509,14 +509,32 @@
                     </div>
                 </div>
                 
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <div class="mb-3">
+                            <label for="telegram_invite_link" class="form-label fw-bold">
+                                <i class="fas fa-link me-2 text-success"></i>Lien d'invitation (optionnel)
+                            </label>
+                            <input type="url" 
+                                   class="form-control" 
+                                   id="telegram_invite_link" 
+                                   name="telegram_invite_link" 
+                                   value="{{ config.telegram_invite_link }}"
+                                   placeholder="https://t.me/+xxxxx ou https://t.me/votre_canal">
+                            <div class="form-text">Lien d'invitation pour le QR code. Si vide, le bot tentera de générer un lien automatiquement.</div>
+                        </div>
+                    </div>
+                </div>
+                
                 <div class="alert alert-info">
                     <i class="fas fa-info-circle me-2"></i>
                     <strong>Comment configurer :</strong>
                     <ol class="mb-0 mt-2">
                         <li>Créer un bot via <strong>@BotFather</strong> sur Telegram</li>
                         <li>Copier le <strong>token</strong> fourni</li>
-                        <li>Ajouter le bot à votre groupe/canal</li>
+                        <li>Ajouter le bot à votre groupe/canal (comme <strong>administrateur</strong> avec permission d'invitation)</li>
                         <li>Utiliser <strong>@userinfobot</strong> pour obtenir l'ID du chat</li>
+                        <li><strong>Pour le QR code :</strong> Copier le lien d'invitation du canal/groupe dans le champ ci-dessus</li>
                     </ol>
                 </div>
             </div>
