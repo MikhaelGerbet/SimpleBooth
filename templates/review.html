@@ -58,13 +58,29 @@
         </div>
     </div>
     <div class="qr-popup" id="qrPopup">
-        <div class="qr-content">
-            <h3><i class="fab fa-telegram me-2"></i>Telegram</h3>
-            <p>Scannez ce QR code pour recevoir vos photos sur Telegram</p>
-            <img id="qrCodeImage" src="" alt="QR Code Telegram">
-            <div id="qrLoading" style="padding: 2rem;"><i class="fas fa-spinner fa-spin fa-3x" style="color: #0088cc;"></i><p style="margin-top: 1rem; color: #666;">Chargement du QR Code...</p></div>
-            <div id="qrError" style="display: none; padding: 2rem; color: #dc3545;"><i class="fas fa-exclamation-triangle fa-3x"></i><p style="margin-top: 1rem;">Impossible de generer le QR Code.</p></div>
-            <br><button class="qr-close-btn" onclick="closeQRPopup()"><i class="fas fa-check me-2"></i>Fermer</button>
+        <div class="qr-content" style="min-width: 380px;">
+            <div style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius: 16px; padding: 1.5rem; margin: 0 auto;">
+                <h4 style="color: #0088cc; margin-bottom: 0.5rem; font-size: 1.3rem;">
+                    <i class="fab fa-telegram me-2"></i>Telegram
+                </h4>
+                <p style="color: #666; font-size: 0.9rem; margin-bottom: 1rem;">Scannez pour recevoir vos photos sur Telegram</p>
+                
+                <div style="display: flex; justify-content: center; align-items: center; min-height: 200px;">
+                    <img id="qrCodeImage" src="" alt="QR Code Telegram" style="display: none; max-width: 200px; max-height: 200px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                    <div id="qrLoading" style="text-align: center;">
+                        <i class="fas fa-spinner fa-spin fa-2x" style="color: #0088cc;"></i>
+                        <p style="margin-top: 0.5rem; color: #888; font-size: 0.85rem;">Chargement...</p>
+                    </div>
+                    <div id="qrError" style="display: none; text-align: center; color: #dc3545;">
+                        <i class="fas fa-exclamation-triangle fa-3x"></i>
+                        <p style="margin-top: 0.5rem;">Impossible de générer le QR Code</p>
+                    </div>
+                </div>
+            </div>
+            
+            <button class="qr-close-btn" onclick="closeQRPopup()" style="margin-top: 1.5rem;">
+                <i class="fas fa-check me-2"></i>Fermer
+            </button>
         </div>
     </div>
     <!-- Modal Impression avec QR Code -->
