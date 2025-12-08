@@ -336,6 +336,11 @@ def capture_photo():
             except Exception as e:
                 logger.error(f"[CAPTURE] Erreur application N&B: {e}")
         
+        # Appliquer l'overlay si activé
+        if config.get('overlay_enabled', False) and config.get('current_overlay', ''):
+            logger.info(f"[CAPTURE] Application de l'overlay sur la photo...")
+            apply_overlay(filepath)
+        
         current_photo = filename
         original_photo = filename
         

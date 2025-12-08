@@ -436,15 +436,16 @@ function startCameraWatchdog() {
             const response = await fetch('/api/camera_status');
             const status = await response.json();
             
-            // Si pas de frame depuis plus de 5 secondes, redémarrer
-            if (!status.active && status.last_frame_age > 5) {
-                console.log('[WATCHDOG] Caméra figée détectée, redémarrage...');
+            // Si pas de frame depuis plus de 5 secondes OU si jamais de frame reçue
+            if (!status.active || status.last_frame_age < 0 || status.last_frame_age > 5) {
+                console.log('[WATCHDOG] Caméra inactive détectée (age:', status.last_frame_age, '), redémarrage...');
                 await fetch('/api/restart_camera', { method: 'POST' });
                 
                 // Recharger le flux vidéo après 2 secondes
                 setTimeout(() => {
                     const videoPreview = document.getElementById('videoPreview');
                     if (videoPreview) {
+                        console.log('[WATCHDOG] Rechargement du flux vidéo...');
                         videoPreview.src = '/video_stream?t=' + Date.now();
                     }
                 }, 2000);
@@ -452,7 +453,7 @@ function startCameraWatchdog() {
         } catch (e) {
             console.log('[WATCHDOG] Erreur vérification caméra:', e);
         }
-    }, 10000); // Vérifier toutes les 10 secondes
+    }, 5000); // Vérifier toutes les 5 secondes (plus réactif)
 }
 
 // Toggle popup
@@ -571,21 +572,40 @@ function loadOverlayPreview() {
         .catch(error => console.error('Erreur overlay:', error));
 }
 
+let cameraRetryCount = 0;
+const MAX_CAMERA_RETRIES = 5;
+
 function initCamera() {
     try {
         console.log('Initialisation du flux vidéo caméra...');
         
         const videoPreview = document.getElementById('videoPreview');
         
-        // Gérer les erreurs de chargement du flux
+        // Gérer les erreurs de chargement du flux avec retry automatique
         videoPreview.onerror = function() {
-            console.error('Erreur de chargement du flux vidéo');
-            showCameraError();
+            console.error('Erreur de chargement du flux vidéo, retry', cameraRetryCount + 1);
+            cameraRetryCount++;
+            
+            if (cameraRetryCount <= MAX_CAMERA_RETRIES) {
+                // Retry après un délai croissant
+                setTimeout(() => {
+                    console.log('[CAMERA] Tentative de reconnexion...');
+                    fetch('/api/restart_camera', { method: 'POST' })
+                        .then(() => {
+                            setTimeout(() => {
+                                videoPreview.src = '/video_stream?t=' + Date.now();
+                            }, 2000);
+                        });
+                }, cameraRetryCount * 1000);
+            } else {
+                showCameraError();
+            }
         };
         
         // Gérer le chargement réussi
         videoPreview.onload = function() {
             console.log('Flux vidéo caméra démarré avec succès');
+            cameraRetryCount = 0; // Reset du compteur
         };
         
         // Démarrer le flux via l'API
