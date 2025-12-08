@@ -212,8 +212,8 @@ function animateInactivityBar() {
 function printPhoto() {
     if (!currentPhotoPath) { showStatus('Aucune photo'); return; }
     showStatus('Impression en cours...');
-    fetch('/print', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ photo_path: currentPhotoPath }) })
-        .then(r => r.json()).then(data => showStatus(data.success ? 'Envoye a l\'imprimante !' : data.error));
+    fetch('/print_photo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ photo_path: currentPhotoPath }) })
+        .then(r => r.json()).then(data => showStatus(data.success ? 'Envoyé à l\'imprimante !' : data.error));
     resetInactivityTimer();
 }
 

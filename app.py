@@ -191,7 +191,7 @@ def unlock():
 @app.route('/verify_pin', methods=['POST'])
 def verify_pin():
     """Vérification du code PIN"""
-    data = request.get_json()
+    data = request.get_json(force=True, silent=True) or {}
     entered_pin = data.get('pin', '')
     correct_pin = config.get('admin_pin', '1234')
     
@@ -253,7 +253,7 @@ def capture_photo():
     
     try:
         # Récupérer le style de la requête
-        data = request.get_json() or {}
+        data = request.get_json(force=True, silent=True) or {}
         photo_style = data.get('style', 'color')
         
         # Générer un nom de fichier unique
@@ -293,17 +293,16 @@ def capture_photo():
                 original_photo = filename
                 return jsonify({'success': True, 'filename': filename})
             
-            # Capture haute résolution pour impression Canon SELPHY CP1500
-            # Format carte postale 10x15cm (100x148mm) @ 300 DPI
-            # Dimensions exactes: 1182 x 1748 pixels
-            # On capture en plus haute résolution pour qualité, ratio 148:100 = 1.48
-            # 2220 x 1500 serait exact, mais on prend un peu plus large pour crop ultérieur
+            # Capture HAUTE RÉSOLUTION maximale pour Pi Camera Module 3 (IMX708)
+            # La caméra supporte jusqu'à 4608x2592 (12MP)
+            # On capture à la résolution max pour avoir la meilleure qualité source
+            # Le redimensionnement pour l'impression se fait dans print_cups.py
             cmd = [
                 still_cmd,
                 '--output', filepath,
-                '--width', '2244',      # 1748 * 1.284 (marge de qualité)
-                '--height', '1518',     # 1182 * 1.284 (même ratio 1.478)
-                '--quality', '95',      # Qualité JPEG élevée
+                '--width', '4608',      # Résolution max IMX708
+                '--height', '2592',     # Résolution max IMX708
+                '--quality', '98',      # Qualité JPEG maximale
                 '--immediate',          # Capture immédiate sans délai
                 '--nopreview',          # Pas d'aperçu
                 '--timeout', '1'        # Timeout minimal
@@ -325,7 +324,7 @@ def capture_photo():
                     else:
                         return jsonify({'success': False, 'error': f'Erreur capture: {error_msg}'})
             else:
-                logger.info(f"[CAPTURE] Photo haute résolution capturée: {filename} (2400x1600)")
+                logger.info(f"[CAPTURE] Photo haute résolution capturée: {filename} (4608x2592 - 12MP)")
         
         # Appliquer le style N&B si sélectionné
         if photo_style == 'bw':
@@ -388,8 +387,17 @@ def print_photo():
     """Imprimer la photo actuelle"""
     global current_photo
     
-    if not current_photo:
+    # Récupérer le photo_path depuis le JSON envoyé, sinon utiliser current_photo
+    data = request.get_json(force=True, silent=True) or {}
+    logger.info(f"[PRINT] Data reçue: {data}, current_photo: {current_photo}")
+    photo_filename = data.get('photo_path') or current_photo
+    
+    if not photo_filename:
         return jsonify({'success': False, 'error': 'Aucune photo à imprimer'})
+    
+    # Extraire juste le nom du fichier si un chemin complet est fourni
+    photo_filename = os.path.basename(photo_filename)
+    logger.info(f"[PRINT] Photo filename: {photo_filename}")
     
     try:
         # Vérifier si l'imprimante est activée
@@ -398,10 +406,10 @@ def print_photo():
         
         # Chercher la photo dans le bon dossier
         photo_path = None
-        if os.path.exists(os.path.join(PHOTOS_FOLDER, current_photo)):
-            photo_path = os.path.join(PHOTOS_FOLDER, current_photo)
-        elif os.path.exists(os.path.join(EFFECT_FOLDER, current_photo)):
-            photo_path = os.path.join(EFFECT_FOLDER, current_photo)
+        if os.path.exists(os.path.join(PHOTOS_FOLDER, photo_filename)):
+            photo_path = os.path.join(PHOTOS_FOLDER, photo_filename)
+        elif os.path.exists(os.path.join(EFFECT_FOLDER, photo_filename)):
+            photo_path = os.path.join(EFFECT_FOLDER, photo_filename)
         else:
             return jsonify({'success': False, 'error': 'Photo introuvable'})
         
@@ -814,10 +822,7 @@ def upload_overlay():
 @app.route('/api/overlay/select', methods=['POST'])
 def select_overlay():
     """Sélectionner un overlay comme overlay actif"""
-    data = request.get_json()
-    
-    if not data:
-        return jsonify({'success': False, 'error': 'Données JSON manquantes'})
+    data = request.get_json(force=True, silent=True) or {}
     
     filename = data.get('filename', '')
     enabled = data.get('enabled', True)
@@ -1256,7 +1261,7 @@ def download_photo(filename):
 def delete_single_photo(filename):
     """Supprimer une photo individuelle"""
     try:
-        data = request.get_json() or {}
+        data = request.get_json(force=True, silent=True) or {}
         photo_type = data.get('type', 'photo')
         
         # Déterminer le dossier selon le type
