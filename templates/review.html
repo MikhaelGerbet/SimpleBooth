@@ -69,20 +69,35 @@
     </div>
     <!-- Modal Impression avec QR Code -->
     <div class="qr-popup" id="printPopup">
-        <div class="qr-content">
-            <div id="printStatusArea">
-                <h3><i class="fas fa-print me-2" style="color: #28a745;"></i>Impression</h3>
-                <div class="print-status" id="printStatus">
+        <div class="qr-content" style="min-width: 380px;">
+            <div id="printStatusArea" style="margin-bottom: 1.5rem;">
+                <div class="print-status" id="printStatus" style="font-size: 1.5rem; margin-bottom: 0;">
                     <i class="fas fa-spinner fa-spin"></i> Envoi à l'imprimante...
                 </div>
             </div>
-            <hr style="margin: 1.5rem 0; border-color: #eee;">
-            <h4 style="color: #0088cc; margin-bottom: 0.5rem;"><i class="fab fa-telegram me-2"></i>Récupérez vos photos</h4>
-            <p style="color: #666; font-size: 0.95rem;">Scannez pour voir et télécharger toutes vos photos</p>
-            <img id="printQrCodeImage" src="" alt="QR Code Telegram" style="display: none;">
-            <div id="printQrLoading" style="padding: 1rem;"><i class="fas fa-spinner fa-spin fa-2x" style="color: #0088cc;"></i></div>
-            <div id="printQrError" style="display: none; padding: 1rem; color: #999;"><i class="fas fa-info-circle"></i> QR Code non disponible</div>
-            <br><button class="qr-close-btn" onclick="closePrintPopup()"><i class="fas fa-check me-2"></i>Terminé</button>
+            
+            <div style="background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%); border-radius: 16px; padding: 1.5rem; margin: 0 auto;">
+                <h4 style="color: #0088cc; margin-bottom: 0.5rem; font-size: 1.3rem;">
+                    <i class="fab fa-telegram me-2"></i>Récupérez vos photos
+                </h4>
+                <p style="color: #666; font-size: 0.9rem; margin-bottom: 1rem;">Scannez pour voir et télécharger toutes vos photos</p>
+                
+                <div style="display: flex; justify-content: center; align-items: center; min-height: 200px;">
+                    <img id="printQrCodeImage" src="" alt="QR Code Telegram" style="display: none; max-width: 200px; max-height: 200px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                    <div id="printQrLoading" style="text-align: center;">
+                        <i class="fas fa-spinner fa-spin fa-2x" style="color: #0088cc;"></i>
+                        <p style="margin-top: 0.5rem; color: #888; font-size: 0.85rem;">Chargement...</p>
+                    </div>
+                    <div id="printQrError" style="display: none; text-align: center; color: #999;">
+                        <i class="fas fa-qrcode fa-3x" style="opacity: 0.3;"></i>
+                        <p style="margin-top: 0.5rem;">QR Code non disponible</p>
+                    </div>
+                </div>
+            </div>
+            
+            <button class="qr-close-btn" onclick="closePrintPopup()" style="margin-top: 1.5rem;">
+                <i class="fas fa-check me-2"></i>Terminé
+            </button>
         </div>
     </div>
 </div>
