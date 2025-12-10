@@ -643,7 +643,8 @@ async def apply_effect_runware(photo_path):
                 return jsonify({
                     'success': True, 
                     'message': 'Effet appliqué avec succès!',
-                    'new_filename': effect_filename
+                    'new_filename': effect_filename,
+                    'photo_path': f'effet/{effect_filename}'
                 })
             else:
                 logger.info(f"[DEBUG IA] ERREUR: Échec du téléchargement (code {response.status_code})")
@@ -1388,6 +1389,14 @@ def serve_photo(filename):
         return send_from_directory(PHOTOS_FOLDER, filename)
     # Sinon vérifier dans le dossier effet
     elif os.path.exists(os.path.join(EFFECT_FOLDER, filename)):
+        return send_from_directory(EFFECT_FOLDER, filename)
+    else:
+        abort(404)
+
+@app.route('/effet/<filename>')
+def serve_effect(filename):
+    """Servir les photos avec effet IA"""
+    if os.path.exists(os.path.join(EFFECT_FOLDER, filename)):
         return send_from_directory(EFFECT_FOLDER, filename)
     else:
         abort(404)
