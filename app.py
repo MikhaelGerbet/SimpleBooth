@@ -165,7 +165,87 @@ current_photo = None
 original_photo = None  # Photo originale pour régénérer les effets
 camera_active = False
 camera_process = None
+camera_lock = threading.Lock()  # Verrou pour éviter les conflits de caméra
 usb_camera = None
+
+# Nettoyage des processus caméra zombies au démarrage
+def cleanup_camera_on_startup():
+    """Nettoyer tous les processus caméra au démarrage de l'application"""
+    try:
+        subprocess.run(['pkill', '-9', '-f', 'rpicam-vid'], capture_output=True, timeout=2)
+        subprocess.run(['pkill', '-9', '-f', 'libcamera-vid'], capture_output=True, timeout=2)
+        subprocess.run(['pkill', '-9', '-f', 'rpicam-still'], capture_output=True, timeout=2)
+        subprocess.run(['pkill', '-9', '-f', 'libcamera-still'], capture_output=True, timeout=2)
+        logger.info("[STARTUP] Processus caméra nettoyés au démarrage")
+    except Exception as e:
+        logger.warning(f"[STARTUP] Erreur nettoyage caméra: {e}")
+
+def prestart_camera():
+    """Pré-démarrer la caméra Pi pour qu'elle soit prête dès le premier accès"""
+    global camera_process, camera_active
+    
+    camera_type = config.get('camera_type', 'picamera')
+    if camera_type != 'picamera':
+        logger.info("[STARTUP] Caméra USB configurée, pas de pré-démarrage")
+        return
+    
+    try:
+        import shutil
+        if shutil.which('rpicam-vid'):
+            camera_cmd = 'rpicam-vid'
+        elif shutil.which('libcamera-vid'):
+            camera_cmd = 'libcamera-vid'
+        else:
+            logger.warning("[STARTUP] Commande caméra non trouvée, pas de pré-démarrage")
+            return
+        
+        cmd = [
+            camera_cmd,
+            '--codec', 'mjpeg',
+            '--width', '1280',
+            '--height', '720',
+            '--framerate', '15',
+            '--timeout', '0',
+            '--output', '-',
+            '--inline',
+            '--flush',
+            '--nopreview'
+        ]
+        
+        logger.info(f"[STARTUP] Pré-démarrage caméra: {' '.join(cmd)}")
+        
+        with camera_lock:
+            camera_process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                bufsize=0
+            )
+        
+        # Attendre un peu et vérifier que ça démarre
+        time.sleep(0.5)
+        
+        if camera_process.poll() is None:
+            camera_active = True
+            logger.info("[STARTUP] Caméra pré-démarrée avec succès!")
+        else:
+            stderr = camera_process.stderr.read().decode('utf-8', errors='ignore')
+            logger.warning(f"[STARTUP] Échec pré-démarrage caméra: {stderr}")
+            camera_process = None
+            
+    except Exception as e:
+        logger.warning(f"[STARTUP] Erreur pré-démarrage caméra: {e}")
+
+# Exécuter le nettoyage au chargement du module
+cleanup_camera_on_startup()
+
+# Pré-démarrer la caméra en arrière-plan après un court délai
+def delayed_camera_start():
+    time.sleep(1)  # Laisser Flask démarrer d'abord
+    prestart_camera()
+
+# Lancer le pré-démarrage dans un thread séparé
+threading.Thread(target=delayed_camera_start, daemon=True).start()
 
 # ============================================
 # AUTHENTIFICATION PAR CODE PIN
@@ -225,14 +305,13 @@ def restart_camera():
     """Redémarrer le flux caméra en cas de problème"""
     global camera_process
     try:
-        logger.info("[CAMERA] Redémarrage demandé...")
+        logger.info("[CAMERA] Redémarrage demandé via API...")
         stop_camera_process()
-        # Tuer tous les processus caméra résiduels
-        subprocess.run(['pkill', '-f', 'libcamera'], capture_output=True)
-        subprocess.run(['pkill', '-f', 'rpicam'], capture_output=True)
-        time.sleep(1)
+        time.sleep(0.5)
+        logger.info("[CAMERA] Caméra prête à être redémarrée")
         return jsonify({'success': True, 'message': 'Caméra redémarrée'})
     except Exception as e:
+        logger.error(f"[CAMERA] Erreur redémarrage: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/camera_status')
@@ -305,6 +384,12 @@ def capture_photo():
                 original_photo = filename
                 return jsonify({'success': True, 'filename': filename})
             
+            # IMPORTANT: Stopper le flux vidéo AVANT la capture pour libérer la caméra
+            # rpicam-still ne peut pas accéder à la caméra si rpicam-vid tourne
+            logger.info("[CAPTURE] Arrêt du flux vidéo pour libérer la caméra...")
+            stop_camera_process()
+            time.sleep(0.3)  # Petit délai pour s'assurer que la caméra est libérée
+            
             # Capture HAUTE RÉSOLUTION maximale pour Pi Camera Module 3 (IMX708)
             # La caméra supporte jusqu'à 4608x2592 (12MP)
             # On capture à la résolution max pour avoir la meilleure qualité source
@@ -323,6 +408,9 @@ def capture_photo():
             logger.info(f"[CAPTURE] Commande: {' '.join(cmd)}")
             
             result = subprocess.run(cmd, capture_output=True, timeout=10)
+            
+            # Relancer le flux vidéo après capture (sera fait automatiquement par le prochain appel à /video_stream)
+            # On ne relance pas ici car l'utilisateur est sur la page review, pas besoin du flux immédiatement
             
             if result.returncode != 0:
                 error_msg = result.stderr.decode() if result.stderr else "Erreur inconnue"
@@ -637,11 +725,11 @@ async def apply_effect_runware(photo_path, prompt_config):
             img_data = img_file.read()
             img_base64 = base64.b64encode(img_data).decode('utf-8')
         
-        # Résolution optimisée qualité/prix pour Canon SELPHY CP1500
-        # Ratio 1.48 (148x100mm) - Résolution haute qualité
-        # 2048x1384 = bon compromis qualité/vitesse/coût
-        AI_WIDTH = 2048
-        AI_HEIGHT = 1384
+        # Résolution supportée par Runware pour Canon SELPHY CP1500
+        # Ratio 1.50 (proche de 1.48 pour 148x100mm)
+        # Dimensions supportées: 1248x832
+        AI_WIDTH = 1248
+        AI_HEIGHT = 832
         
         # Préparer la requête d'inférence
         request = IImageInference(
@@ -1928,6 +2016,9 @@ def serve_effect(filename):
 @app.route('/video_stream')
 def video_stream():
     """Flux vidéo MJPEG en temps réel"""
+    # Marquer la caméra comme active dès qu'un client demande le flux
+    global camera_active
+    camera_active = True
     return Response(generate_video_stream(),
                    mimetype='multipart/x-mixed-replace; boundary=frame')
 
@@ -1939,9 +2030,6 @@ def generate_video_stream():
     camera_type = config.get('camera_type', 'picamera')
     
     try:
-        # Arrêter tout processus caméra existant
-        stop_camera_process()
-        
         # Utiliser la caméra USB si configurée
         if camera_type == 'usb':
             logger.info("[CAMERA] Démarrage de la caméra USB...")
@@ -1980,45 +2068,102 @@ def generate_video_stream():
             else:
                 raise Exception("Aucune commande caméra trouvée (rpicam-vid ou libcamera-vid)")
             
-            # Commande pour flux MJPEG - résolution 16/9
-            cmd = [
-                camera_cmd,
-                '--codec', 'mjpeg',
-                '--width', '1280',   # Résolution native plus compatible
-                '--height', '720',   # Vrai 16/9 sans bandes noires
-                '--framerate', '15', # Framerate plus élevé pour cette résolution
-                '--timeout', '0',    # Durée infinie
-                '--output', '-',     # Sortie vers stdout
-                '--inline',          # Headers inline
-                '--flush',           # Flush immédiat
-                '--nopreview'        # Pas d'aperçu local
-            ]
+            # Vérifier si un processus caméra existe déjà et est toujours actif
+            with camera_lock:
+                if camera_process is not None and camera_process.poll() is None:
+                    logger.info("[CAMERA] Processus caméra déjà actif, réutilisation...")
+                else:
+                    # Nettoyer tout ancien processus mort
+                    if camera_process is not None:
+                        logger.info("[CAMERA] Ancien processus mort détecté, nettoyage...")
+                        try:
+                            camera_process.kill()
+                            camera_process.wait(timeout=1)
+                        except:
+                            pass
+                        camera_process = None
+                    
+                    # Tuer les zombies éventuels
+                    kill_camera_processes()
+                    time.sleep(0.3)
+                    
+                    # Commande pour flux MJPEG - résolution 16/9
+                    cmd = [
+                        camera_cmd,
+                        '--codec', 'mjpeg',
+                        '--width', '1280',   # Résolution native plus compatible
+                        '--height', '720',   # Vrai 16/9 sans bandes noires
+                        '--framerate', '15', # Framerate stable
+                        '--timeout', '0',    # Durée infinie
+                        '--output', '-',     # Sortie vers stdout
+                        '--inline',          # Headers inline
+                        '--flush',           # Flush immédiat
+                        '--nopreview'        # Pas d'aperçu local
+                    ]
+                    
+                    logger.info(f"[CAMERA] Lancement: {' '.join(cmd)}")
+                    
+                    camera_process = subprocess.Popen(
+                        cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        bufsize=0
+                    )
             
-            camera_process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                bufsize=0
-            )
+            # Attendre un peu que la caméra démarre (seulement si nouveau processus)
+            time.sleep(0.3)
+            
+            # Vérifier que le processus est toujours actif
+            with camera_lock:
+                if camera_process is None or camera_process.poll() is not None:
+                    stderr_msg = ""
+                    if camera_process and camera_process.stderr:
+                        stderr_msg = camera_process.stderr.read().decode('utf-8', errors='ignore')
+                    logger.error(f"[CAMERA] Échec du démarrage: {stderr_msg}")
+                    raise Exception(f"La caméra n'a pas pu démarrer: {stderr_msg}")
+            
+            logger.info("[CAMERA] Pi Camera démarrée avec succès")
             
             # Buffer pour assembler les frames JPEG
             buffer = b''
+            frames_received = 0
+            last_frame_log = time.time()
             
-            while camera_process and camera_process.poll() is None:
-                try:
-                    # Lire les données par petits blocs
-                    chunk = camera_process.stdout.read(1024)
-                    if not chunk:
+            while True:
+                # Vérifier que le processus caméra est toujours actif
+                with camera_lock:
+                    if camera_process is None or camera_process.poll() is not None:
+                        logger.warning("[CAMERA] Processus caméra mort, sortie de la boucle pour relance...")
                         break
+                
+                try:
+                    # Lire les données par blocs plus grands pour éviter les artefacts
+                    chunk = camera_process.stdout.read(8192)
+                    if not chunk:
+                        time.sleep(0.01)
+                        continue
                         
                     buffer += chunk
+                    
+                    # Limiter la taille du buffer pour éviter les fuites mémoire
+                    if len(buffer) > 2000000:  # 2MB max
+                        # Chercher le dernier marqueur de début valide
+                        last_start = buffer.rfind(b'\xff\xd8')
+                        if last_start > 0:
+                            buffer = buffer[last_start:]
                     
                     # Chercher les marqueurs JPEG
                     while True:
                         # Chercher le début d'une frame JPEG (0xFFD8)
                         start = buffer.find(b'\xff\xd8')
                         if start == -1:
+                            buffer = b''  # Vider le buffer si pas de début trouvé
                             break
+                        
+                        # Jeter tout ce qui précède le début
+                        if start > 0:
+                            buffer = buffer[start:]
+                            start = 0
                             
                         # Chercher la fin de la frame JPEG (0xFFD9)
                         end = buffer.find(b'\xff\xd9', start + 2)
@@ -2029,11 +2174,17 @@ def generate_video_stream():
                         jpeg_frame = buffer[start:end + 2]
                         buffer = buffer[end + 2:]
                         
+                        # Validation minimale : taille raisonnable
+                        if len(jpeg_frame) < 5000:  # Frame trop petite, probablement corrompue
+                            continue
+                        
                         # Stocker la frame pour capture instantanée
                         global last_frame_time
                         with frame_lock:
                             last_frame = jpeg_frame
                             last_frame_time = time.time()
+                        
+                        frames_received += 1
                         
                         # Envoyer la frame au navigateur
                         yield (b'--frame\r\n'
@@ -2053,31 +2204,59 @@ def generate_video_stream():
                b'Content-Type: text/plain\r\n\r\n' +
                error_msg.encode() + b'\r\n')
     finally:
-        stop_camera_process()
+        # Ne pas tuer le flux caméra si le mode aperçu est actif
+        # Évite l'arrêt intempestif du processus lors d'une déconnexion client ou d'un petit glitch
+        global camera_active
+        if not camera_active:
+            stop_camera_process()
+        else:
+            logger.info("[CAMERA] Générateur terminé, caméra laissée active (camera_active=True)")
+
+def kill_camera_processes():
+    """Tuer tous les processus caméra zombies de façon agressive"""
+    try:
+        # Tuer tous les processus rpicam-vid et libcamera-vid
+        subprocess.run(['pkill', '-9', '-f', 'rpicam-vid'], 
+                      capture_output=True, timeout=2)
+        subprocess.run(['pkill', '-9', '-f', 'libcamera-vid'], 
+                      capture_output=True, timeout=2)
+        subprocess.run(['pkill', '-9', '-f', 'libcamera-still'], 
+                      capture_output=True, timeout=2)
+        subprocess.run(['pkill', '-9', '-f', 'rpicam-still'], 
+                      capture_output=True, timeout=2)
+        time.sleep(0.3)  # Laisser le temps aux processus de mourir
+        logger.info("[CAMERA] Processus caméra zombies nettoyés")
+    except Exception as e:
+        logger.warning(f"[CAMERA] Erreur lors du nettoyage des processus: {e}")
 
 def stop_camera_process():
     """Arrêter proprement le processus caméra (Pi Camera ou USB)"""
     global camera_process, usb_camera
     
-    # Arrêter la caméra USB si active
-    if usb_camera:
-        try:
-            usb_camera.stop()
-        except Exception as e:
-            logger.info(f"[CAMERA] Erreur lors de l'arrêt de la caméra USB: {e}")
-        usb_camera = None
-    
-    # Arrêter le processus libcamera-vid si actif
-    if camera_process:
-        try:
-            camera_process.terminate()
-            camera_process.wait(timeout=2)
-        except:
+    with camera_lock:
+        # Arrêter la caméra USB si active
+        if usb_camera:
             try:
-                camera_process.kill()
+                usb_camera.stop()
+            except Exception as e:
+                logger.info(f"[CAMERA] Erreur lors de l'arrêt de la caméra USB: {e}")
+            usb_camera = None
+        
+        # Arrêter le processus libcamera-vid si actif
+        if camera_process:
+            try:
+                camera_process.terminate()
+                camera_process.wait(timeout=1)
             except:
-                pass
-        camera_process = None
+                try:
+                    camera_process.kill()
+                    camera_process.wait(timeout=1)
+                except:
+                    pass
+            camera_process = None
+        
+        # Toujours nettoyer les processus zombies
+        kill_camera_processes()
 
 @app.route('/start_camera')
 def start_camera():
@@ -2108,4 +2287,6 @@ signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    # Désactiver le reloader en mode kiosk par défaut pour éviter les courses au démarrage
+    debug_mode = os.environ.get('SIMPLEBOOTH_DEBUG') == '1'
+    app.run(host='0.0.0.0', port=5000, debug=debug_mode)

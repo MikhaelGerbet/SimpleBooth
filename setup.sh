@@ -193,7 +193,7 @@ update_system() {
 }
 
 install_dependencies() {
-  local pkgs=(python3 python3-venv python3-pip build-essential libcap2-bin libcap-dev xserver-xorg xinit x11-xserver-utils unclutter)
+  local pkgs=(python3 python3-venv python3-pip build-essential libcap2-bin libcap-dev xserver-xorg xinit x11-xserver-utils unclutter libcamera-apps)
   [[ -n "$CHROMIUM_PKG" ]] && pkgs+=("$CHROMIUM_PKG")
   step "Installation des dépendances"
   log "${#pkgs[@]} paquets à installer"
@@ -316,9 +316,20 @@ xset s off dpms s noblank
 unclutter -idle 0.1 -root &
 cd "$APP_DIR"
 source "$VENV_DIR/bin/activate"
-python app.py &
-sleep 5
-exec $CHROMIUM_PKG --kiosk --no-sandbox --disable-infobars \
+ # Nettoyer d'éventuels processus caméra résiduels
+ pkill -9 -f rpicam-vid 2>/dev/null || true
+ pkill -9 -f libcamera-vid 2>/dev/null || true
+ pkill -9 -f rpicam-still 2>/dev/null || true
+ pkill -9 -f libcamera-still 2>/dev/null || true
+
+ # Démarrer Flask en arrière-plan sans reloader (debug désactivé par défaut)
+ export SIMPLEBOOTH_DEBUG=0
+ nohup python app.py > /tmp/simplebooth.log 2>&1 &
+
+ # Attendre que le serveur soit joignable avant de lancer Chromium
+ until curl -sSf http://localhost:5000/ >/dev/null; do sleep 0.5; done
+
+ exec $CHROMIUM_PKG --kiosk --no-sandbox --disable-infobars \
   --disable-features=TranslateUI,Translate \
   --disable-translate \
   --disable-extensions \

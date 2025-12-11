@@ -649,7 +649,8 @@ function restartCameraStream() {
             setTimeout(() => {
                 // Forcer le rechargement de l'image en ajoutant un timestamp
                 const timestamp = new Date().getTime();
-                videoPreview.src = '/video_feed?' + timestamp;
+                // Correctif: utiliser la bonne route du flux
+                videoPreview.src = '/video_stream?' + timestamp;
                 videoPreview.style.opacity = '1';
             }, 1500);
         })
@@ -657,7 +658,8 @@ function restartCameraStream() {
             console.error('Erreur restart caméra:', err);
             // Fallback: recharger juste le flux
             const timestamp = new Date().getTime();
-            videoPreview.src = '/video_feed?' + timestamp;
+            // Correctif: utiliser la bonne route du flux
+            videoPreview.src = '/video_stream?' + timestamp;
             videoPreview.style.opacity = '1';
         });
 }
@@ -686,30 +688,35 @@ function loadOverlayPreview() {
 }
 
 let cameraRetryCount = 0;
-const MAX_CAMERA_RETRIES = 3;
+const MAX_CAMERA_RETRIES = 5;
+let cameraHealthCheckInterval = null;
+let lastCameraLoadTime = 0;
 
 function initCamera() {
-    try {
-        console.log('[CAMERA] Initialisation du flux vidéo caméra...');
-        
-        const videoPreview = document.getElementById('videoPreview');
-        if (!videoPreview) {
-            console.error('[CAMERA] Element videoPreview non trouvé, retry...');
-            setTimeout(initCamera, 100);
-            return;
-        }
-        
-        // Charger le flux directement - le serveur démarrera la caméra automatiquement
-        console.log('[CAMERA] Chargement du flux...');
-        videoPreview.src = '/video_stream?t=' + Date.now();
-        
-        // Notifier le serveur en parallèle (non bloquant)
-        fetch('/start_camera').catch(() => {});
-        
-    } catch (error) {
-        console.error('Erreur d\'accès à la caméra:', error);
-        showCameraError();
+    console.log('[CAMERA] Initialisation du flux vidéo...');
+    
+    const videoPreview = document.getElementById('videoPreview');
+    if (!videoPreview) {
+        console.error('[CAMERA] Element videoPreview non trouvé');
+        setTimeout(initCamera, 100);
+        return;
     }
+    
+    // Charger le flux directement - SIMPLE
+    lastCameraLoadTime = Date.now();
+    videoPreview.src = '/video_stream?t=' + lastCameraLoadTime;
+    
+    // Notifier le serveur
+    fetch('/start_camera').catch(() => {});
+}
+
+function handleCameraError() {
+    console.error('[CAMERA] Erreur de flux');
+    // Ne rien faire d'automatique - l'utilisateur peut double-tap pour redémarrer
+}
+
+function startCameraHealthCheck() {
+    // Désactivé - cause des boucles de redémarrage
 }
 
 function showCameraError() {
