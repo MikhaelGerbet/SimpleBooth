@@ -168,6 +168,10 @@ camera_process = None
 camera_lock = threading.Lock()  # Verrou pour éviter les conflits de caméra
 usb_camera = None
 
+# Thread de lecture des frames - pour éviter que plusieurs clients lisent le même pipe
+camera_reader_thread = None
+camera_reader_running = False
+
 # Nettoyage des processus caméra zombies au démarrage
 def cleanup_camera_on_startup():
     """Nettoyer tous les processus caméra au démarrage de l'application"""
@@ -182,7 +186,7 @@ def cleanup_camera_on_startup():
 
 def prestart_camera():
     """Pré-démarrer la caméra Pi pour qu'elle soit prête dès le premier accès"""
-    global camera_process, camera_active
+    global camera_process, camera_active, camera_reader_thread, camera_reader_running
     
     camera_type = config.get('camera_type', 'picamera')
     if camera_type != 'picamera':
@@ -202,9 +206,9 @@ def prestart_camera():
         cmd = [
             camera_cmd,
             '--codec', 'mjpeg',
-            '--width', '1280',
-            '--height', '720',
-            '--framerate', '15',
+            '--width', '2304',       # Résolution HD pour capture directe (suffisant pour impression 15x10cm)
+            '--height', '1296',      # Ratio 16:9, qualité intermédiaire IMX708
+            '--framerate', '30',     # 30fps fluide (max 56fps à cette résolution)
             '--timeout', '0',
             '--output', '-',
             '--inline',
@@ -228,6 +232,14 @@ def prestart_camera():
         if camera_process.poll() is None:
             camera_active = True
             logger.info("[STARTUP] Caméra pré-démarrée avec succès!")
+            
+            # Démarrer le thread de lecture des frames
+            # Ce thread lit les frames du pipe et les stocke dans last_frame
+            # Cela évite que plusieurs clients web lisent le même pipe (cause du glitch)
+            camera_reader_running = True
+            camera_reader_thread = threading.Thread(target=camera_reader_loop_startup, daemon=True)
+            camera_reader_thread.start()
+            logger.info("[STARTUP] Thread de lecture des frames démarré")
         else:
             stderr = camera_process.stderr.read().decode('utf-8', errors='ignore')
             logger.warning(f"[STARTUP] Échec pré-démarrage caméra: {stderr}")
@@ -235,6 +247,64 @@ def prestart_camera():
             
     except Exception as e:
         logger.warning(f"[STARTUP] Erreur pré-démarrage caméra: {e}")
+
+def camera_reader_loop_startup():
+    """Version startup du thread de lecture (appelée par prestart_camera)"""
+    global camera_process, last_frame, last_frame_time, camera_reader_running
+    
+    logger.info("[CAMERA-READER] Thread de lecture démarré (startup)")
+    buffer = b''
+    
+    while camera_reader_running:
+        try:
+            with camera_lock:
+                proc = camera_process
+            
+            if proc is None or proc.poll() is not None:
+                time.sleep(0.1)
+                continue
+            
+            chunk = proc.stdout.read(8192)
+            if not chunk:
+                time.sleep(0.01)
+                continue
+                
+            buffer += chunk
+            
+            if len(buffer) > 2000000:
+                last_start = buffer.rfind(b'\xff\xd8')
+                if last_start > 0:
+                    buffer = buffer[last_start:]
+            
+            while True:
+                start = buffer.find(b'\xff\xd8')
+                if start == -1:
+                    buffer = b''
+                    break
+                
+                if start > 0:
+                    buffer = buffer[start:]
+                    start = 0
+                    
+                end = buffer.find(b'\xff\xd9', start + 2)
+                if end == -1:
+                    break
+                    
+                jpeg_frame = buffer[start:end + 2]
+                buffer = buffer[end + 2:]
+                
+                if len(jpeg_frame) < 5000:
+                    continue
+                
+                with frame_lock:
+                    last_frame = jpeg_frame
+                    last_frame_time = time.time()
+                    
+        except Exception as e:
+            logger.warning(f"[CAMERA-READER] Erreur lecture: {e}")
+            time.sleep(0.1)
+    
+    logger.info("[CAMERA-READER] Thread de lecture arrêté")
 
 # Exécuter le nettoyage au chargement du module
 cleanup_camera_on_startup()
@@ -339,7 +409,7 @@ def get_public_config():
 
 @app.route('/capture', methods=['POST'])
 def capture_photo():
-    """Capturer une photo haute résolution pour impression 15x10cm (300dpi)"""
+    """Capturer une photo instantanée depuis le flux vidéo HD (2304x1296)"""
     global current_photo, original_photo, last_frame
     
     try:
@@ -352,85 +422,27 @@ def capture_photo():
         filename = f'photo_{timestamp}.jpg'
         filepath = os.path.join(PHOTOS_FOLDER, filename)
         
-        camera_type = config.get('camera_type', 'picamera')
+        # Capture INSTANTANÉE depuis le flux vidéo HD (2304x1296)
+        # Le flux est en haute résolution, suffisante pour l'impression 15x10cm
+        # C'est cette image qui correspond au moment exact du "Cheese"
+        instant_frame = None
+        with frame_lock:
+            if last_frame is not None:
+                instant_frame = last_frame
         
-        if camera_type == 'usb':
-            # Pour caméra USB, utiliser la frame du flux
-            with frame_lock:
-                if last_frame is not None:
-                    with open(filepath, 'wb') as f:
-                        f.write(last_frame)
-                    logger.info(f"Photo USB capturée: {filename}")
-                else:
-                    return jsonify({'success': False, 'error': 'Aucune frame disponible'})
-        else:
-            # Pour Pi Camera: capture haute résolution avec rpicam-still/libcamera-still
-            import shutil
-            
-            if shutil.which('rpicam-still'):
-                still_cmd = 'rpicam-still'
-            elif shutil.which('libcamera-still'):
-                still_cmd = 'libcamera-still'
-            else:
-                # Fallback: utiliser la frame du flux
-                with frame_lock:
-                    if last_frame is not None:
-                        with open(filepath, 'wb') as f:
-                            f.write(last_frame)
-                        logger.info(f"Photo (fallback flux) capturée: {filename}")
-                    else:
-                        return jsonify({'success': False, 'error': 'Aucune frame disponible'})
-                current_photo = filename
-                original_photo = filename
-                return jsonify({'success': True, 'filename': filename})
-            
-            # IMPORTANT: Stopper le flux vidéo AVANT la capture pour libérer la caméra
-            # rpicam-still ne peut pas accéder à la caméra si rpicam-vid tourne
-            logger.info("[CAPTURE] Arrêt du flux vidéo pour libérer la caméra...")
-            stop_camera_process()
-            time.sleep(0.3)  # Petit délai pour s'assurer que la caméra est libérée
-            
-            # Capture HAUTE RÉSOLUTION maximale pour Pi Camera Module 3 (IMX708)
-            # La caméra supporte jusqu'à 4608x2592 (12MP)
-            # On capture à la résolution max pour avoir la meilleure qualité source
-            # Le redimensionnement pour l'impression se fait dans print_cups.py
-            cmd = [
-                still_cmd,
-                '--output', filepath,
-                '--width', '4608',      # Résolution max IMX708
-                '--height', '2592',     # Résolution max IMX708
-                '--quality', '98',      # Qualité JPEG maximale
-                '--immediate',          # Capture immédiate sans délai
-                '--nopreview',          # Pas d'aperçu
-                '--timeout', '1'        # Timeout minimal
-            ]
-            
-            logger.info(f"[CAPTURE] Commande: {' '.join(cmd)}")
-            
-            result = subprocess.run(cmd, capture_output=True, timeout=10)
-            
-            # Relancer le flux vidéo après capture (sera fait automatiquement par le prochain appel à /video_stream)
-            # On ne relance pas ici car l'utilisateur est sur la page review, pas besoin du flux immédiatement
-            
-            if result.returncode != 0:
-                error_msg = result.stderr.decode() if result.stderr else "Erreur inconnue"
-                logger.error(f"[CAPTURE] Erreur: {error_msg}")
-                # Fallback sur le flux si la capture échoue
-                with frame_lock:
-                    if last_frame is not None:
-                        with open(filepath, 'wb') as f:
-                            f.write(last_frame)
-                        logger.info(f"Photo (fallback après erreur) capturée: {filename}")
-                    else:
-                        return jsonify({'success': False, 'error': f'Erreur capture: {error_msg}'})
-            else:
-                logger.info(f"[CAPTURE] Photo haute résolution capturée: {filename} (4608x2592 - 12MP)")
+        if instant_frame is None:
+            return jsonify({'success': False, 'error': 'Aucune frame disponible'})
+        
+        # Sauvegarder immédiatement la frame HD
+        with open(filepath, 'wb') as f:
+            f.write(instant_frame)
+        logger.info(f"[CAPTURE] Photo HD capturée instantanément: {filename} (2304x1296)")
         
         # Appliquer le style N&B si sélectionné
         if photo_style == 'bw':
             try:
                 img = Image.open(filepath)
-                img_bw = img.convert('L').convert('RGB')  # Convertir en niveaux de gris puis RGB
+                img_bw = img.convert('L').convert('RGB')
                 img_bw.save(filepath, 'JPEG', quality=95)
                 logger.info(f"[CAPTURE] Style N&B appliqué à {filename}")
             except Exception as e:
@@ -455,9 +467,6 @@ def capture_photo():
         
         return jsonify({'success': True, 'filename': filename})
             
-    except subprocess.TimeoutExpired:
-        logger.error("[CAPTURE] Timeout lors de la capture")
-        return jsonify({'success': False, 'error': 'Timeout de capture'})
     except Exception as e:
         logger.info(f"Erreur lors de la capture: {e}")
         return jsonify({'success': False, 'error': f'Erreur de capture: {str(e)}'})
@@ -1160,9 +1169,9 @@ def get_default_ai_prompts():
         },
         {
             "id": "royalty",
-            "name": "Royauté",
-            "icon": "fa-crown",
-            "prompt": "Transform this photo into a royal portrait scene. Keep the faces exactly as they are, with identical facial features, skin tone, and expressions. Add regal attire: ornate royal robes, crown or tiara, jewels, and royal regalia. Background should be a magnificent throne room or palace interior with velvet drapes, golden decorations, and chandeliers. Renaissance painting style lighting. Maintain photorealistic quality for faces. Ultra high resolution, 8K quality.",
+            "name": "Harry Potter",
+            "icon": "fa-hat-wizard",
+            "prompt": "Transform this photo into a Hogwarts wizarding world scene. Keep the faces exactly as they are, with identical facial features, skin tone, and expressions. Add Hogwarts school robes with house colors (Gryffindor, Slytherin, Hufflepuff or Ravenclaw), magic wand, and round glasses like Harry Potter if fitting. Background should be inside Hogwarts castle: Great Hall with floating candles, moving staircases, or Gryffindor common room. Add magical atmosphere with floating books, owl, and subtle magic sparkles. Maintain photorealistic quality for faces. Ultra high resolution, 8K quality.",
             "enabled": True,
             "order": 6
         },
@@ -1176,9 +1185,9 @@ def get_default_ai_prompts():
         },
         {
             "id": "christmas",
-            "name": "Noël",
-            "icon": "fa-snowflake",
-            "prompt": "Transform this photo into a magical Christmas scene. Keep the faces exactly as they are, with identical facial features, skin tone, and expressions. Add festive holiday attire: cozy Christmas sweaters, Santa hat, or elegant winter clothing. Background should be a warm Christmas setting with decorated tree, fireplace, snow falling outside window, and warm golden lighting. Add subtle snowflakes and holiday magic. Maintain photorealistic quality for faces. Ultra high resolution, 8K quality.",
+            "name": "The Simpsons",
+            "icon": "fa-tv",
+            "prompt": "Transform this photo into The Simpsons cartoon style. Convert the people into Simpsons characters with yellow skin, overbite, and the distinctive Simpsons art style while maintaining their recognizable features, hairstyle shape, and expressions. Use the classic Simpsons animation style with bold outlines, flat colors, and characteristic features like big round eyes. Background should be a typical Simpsons location like the living room with the iconic couch, Moe's tavern, or Springfield town. Maintain the person's identity but in Simpsons cartoon form. High quality cartoon illustration.",
             "enabled": True,
             "order": 8
         },
@@ -2022,15 +2031,88 @@ def video_stream():
     return Response(generate_video_stream(),
                    mimetype='multipart/x-mixed-replace; boundary=frame')
 
+def camera_reader_loop():
+    """Thread dédié qui lit les frames de la caméra et les stocke dans last_frame.
+    Cela évite que plusieurs clients lisent le même pipe stdout (cause du glitch)."""
+    global camera_process, last_frame, last_frame_time, camera_reader_running
+    
+    logger.info("[CAMERA-READER] Thread de lecture démarré")
+    buffer = b''
+    
+    while camera_reader_running:
+        try:
+            with camera_lock:
+                proc = camera_process
+            
+            if proc is None or proc.poll() is not None:
+                time.sleep(0.1)
+                continue
+            
+            # Lire les données par blocs
+            chunk = proc.stdout.read(8192)
+            if not chunk:
+                time.sleep(0.01)
+                continue
+                
+            buffer += chunk
+            
+            # Limiter la taille du buffer pour éviter les fuites mémoire
+            if len(buffer) > 2000000:  # 2MB max
+                last_start = buffer.rfind(b'\xff\xd8')
+                if last_start > 0:
+                    buffer = buffer[last_start:]
+            
+            # Chercher les frames JPEG complètes
+            while True:
+                start = buffer.find(b'\xff\xd8')
+                if start == -1:
+                    buffer = b''
+                    break
+                
+                if start > 0:
+                    buffer = buffer[start:]
+                    start = 0
+                    
+                end = buffer.find(b'\xff\xd9', start + 2)
+                if end == -1:
+                    break
+                    
+                jpeg_frame = buffer[start:end + 2]
+                buffer = buffer[end + 2:]
+                
+                # Validation minimale
+                if len(jpeg_frame) < 5000:
+                    continue
+                
+                # Stocker la frame
+                with frame_lock:
+                    last_frame = jpeg_frame
+                    last_frame_time = time.time()
+                    
+        except Exception as e:
+            logger.warning(f"[CAMERA-READER] Erreur lecture: {e}")
+            time.sleep(0.1)
+    
+    logger.info("[CAMERA-READER] Thread de lecture arrêté")
+
+def ensure_camera_reader_running():
+    """S'assurer que le thread de lecture de la caméra tourne"""
+    global camera_reader_thread, camera_reader_running
+    
+    if camera_reader_thread is None or not camera_reader_thread.is_alive():
+        camera_reader_running = True
+        camera_reader_thread = threading.Thread(target=camera_reader_loop, daemon=True)
+        camera_reader_thread.start()
+        logger.info("[CAMERA] Thread de lecture lancé")
+
 def generate_video_stream():
-    """Générer le flux vidéo MJPEG selon le type de caméra configuré"""
+    """Générer le flux vidéo MJPEG - lit les frames depuis last_frame (rempli par le thread reader)"""
     global camera_process, usb_camera, last_frame
     
-    # Déterminer le type de caméra à utiliser
     camera_type = config.get('camera_type', 'picamera')
     
     try:
-        # Utiliser la caméra USB si configurée
+        # Caméra USB
         if camera_type == 'usb':
             logger.info("[CAMERA] Démarrage de la caméra USB...")
             camera_id = config.get('usb_camera_id', 0)
@@ -2038,26 +2120,21 @@ def generate_video_stream():
             if not usb_camera.start():
                 raise Exception(f"Impossible de démarrer la caméra USB avec ID {camera_id}")
             
-            # Générateur de frames pour la caméra USB
             while True:
                 frame = usb_camera.get_frame()
                 if frame:
-                    # Stocker la frame pour capture instantanée
                     with frame_lock:
                         last_frame = frame
-                    
-                    # Envoyer la frame au navigateur
                     yield (b'--frame\r\n'
                            b'Content-Type: image/jpeg\r\n'
                            b'Content-Length: ' + str(len(frame)).encode() + b'\r\n\r\n' +
                            frame + b'\r\n')
                 else:
-                    time.sleep(0.03)  # Attendre si pas de frame disponible
+                    time.sleep(0.03)
         
-        # Utiliser la Pi Camera par défaut
+        # Pi Camera
         else:
             logger.info("[CAMERA] Démarrage de la Pi Camera...")
-            # Détecter si rpicam-vid ou libcamera-vid est disponible (Pi 5 vs Pi 4)
             import shutil
             if shutil.which('rpicam-vid'):
                 camera_cmd = 'rpicam-vid'
@@ -2068,12 +2145,11 @@ def generate_video_stream():
             else:
                 raise Exception("Aucune commande caméra trouvée (rpicam-vid ou libcamera-vid)")
             
-            # Vérifier si un processus caméra existe déjà et est toujours actif
+            # Démarrer le processus caméra si nécessaire
             with camera_lock:
                 if camera_process is not None and camera_process.poll() is None:
                     logger.info("[CAMERA] Processus caméra déjà actif, réutilisation...")
                 else:
-                    # Nettoyer tout ancien processus mort
                     if camera_process is not None:
                         logger.info("[CAMERA] Ancien processus mort détecté, nettoyage...")
                         try:
@@ -2083,22 +2159,20 @@ def generate_video_stream():
                             pass
                         camera_process = None
                     
-                    # Tuer les zombies éventuels
                     kill_camera_processes()
                     time.sleep(0.3)
                     
-                    # Commande pour flux MJPEG - résolution 16/9
                     cmd = [
                         camera_cmd,
                         '--codec', 'mjpeg',
-                        '--width', '1280',   # Résolution native plus compatible
-                        '--height', '720',   # Vrai 16/9 sans bandes noires
-                        '--framerate', '15', # Framerate stable
-                        '--timeout', '0',    # Durée infinie
-                        '--output', '-',     # Sortie vers stdout
-                        '--inline',          # Headers inline
-                        '--flush',           # Flush immédiat
-                        '--nopreview'        # Pas d'aperçu local
+                        '--width', '2304',       # Résolution HD pour capture directe
+                        '--height', '1296',      # Ratio 16:9, qualité intermédiaire IMX708
+                        '--framerate', '30',     # 30fps fluide
+                        '--timeout', '0',
+                        '--output', '-',
+                        '--inline',
+                        '--flush',
+                        '--nopreview'
                     ]
                     
                     logger.info(f"[CAMERA] Lancement: {' '.join(cmd)}")
@@ -2110,10 +2184,8 @@ def generate_video_stream():
                         bufsize=0
                     )
             
-            # Attendre un peu que la caméra démarre (seulement si nouveau processus)
             time.sleep(0.3)
             
-            # Vérifier que le processus est toujours actif
             with camera_lock:
                 if camera_process is None or camera_process.poll() is not None:
                     stderr_msg = ""
@@ -2124,88 +2196,40 @@ def generate_video_stream():
             
             logger.info("[CAMERA] Pi Camera démarrée avec succès")
             
-            # Buffer pour assembler les frames JPEG
-            buffer = b''
-            frames_received = 0
-            last_frame_log = time.time()
+            # S'assurer que le thread de lecture tourne
+            ensure_camera_reader_running()
+            
+            # Ce générateur lit simplement last_frame et l'envoie au client
+            # Le thread camera_reader_loop() remplit last_frame en continu
+            last_sent_time = 0
             
             while True:
-                # Vérifier que le processus caméra est toujours actif
                 with camera_lock:
                     if camera_process is None or camera_process.poll() is not None:
-                        logger.warning("[CAMERA] Processus caméra mort, sortie de la boucle pour relance...")
+                        logger.warning("[CAMERA] Processus caméra mort")
                         break
                 
-                try:
-                    # Lire les données par blocs plus grands pour éviter les artefacts
-                    chunk = camera_process.stdout.read(8192)
-                    if not chunk:
-                        time.sleep(0.01)
-                        continue
-                        
-                    buffer += chunk
-                    
-                    # Limiter la taille du buffer pour éviter les fuites mémoire
-                    if len(buffer) > 2000000:  # 2MB max
-                        # Chercher le dernier marqueur de début valide
-                        last_start = buffer.rfind(b'\xff\xd8')
-                        if last_start > 0:
-                            buffer = buffer[last_start:]
-                    
-                    # Chercher les marqueurs JPEG
-                    while True:
-                        # Chercher le début d'une frame JPEG (0xFFD8)
-                        start = buffer.find(b'\xff\xd8')
-                        if start == -1:
-                            buffer = b''  # Vider le buffer si pas de début trouvé
-                            break
-                        
-                        # Jeter tout ce qui précède le début
-                        if start > 0:
-                            buffer = buffer[start:]
-                            start = 0
-                            
-                        # Chercher la fin de la frame JPEG (0xFFD9)
-                        end = buffer.find(b'\xff\xd9', start + 2)
-                        if end == -1:
-                            break
-                            
-                        # Extraire la frame complète
-                        jpeg_frame = buffer[start:end + 2]
-                        buffer = buffer[end + 2:]
-                        
-                        # Validation minimale : taille raisonnable
-                        if len(jpeg_frame) < 5000:  # Frame trop petite, probablement corrompue
-                            continue
-                        
-                        # Stocker la frame pour capture instantanée
-                        global last_frame_time
-                        with frame_lock:
-                            last_frame = jpeg_frame
-                            last_frame_time = time.time()
-                        
-                        frames_received += 1
-                        
-                        # Envoyer la frame au navigateur
-                        yield (b'--frame\r\n'
-                               b'Content-Type: image/jpeg\r\n'
-                               b'Content-Length: ' + str(len(jpeg_frame)).encode() + b'\r\n\r\n' +
-                               jpeg_frame + b'\r\n')
-                               
-                except Exception as e:
-                    logger.info(f"[CAMERA] Erreur lecture flux: {e}")
-                    break
+                with frame_lock:
+                    current_frame = last_frame
+                    current_time = last_frame_time
+                
+                # Envoyer une nouvelle frame seulement si elle a changé
+                if current_frame and current_time > last_sent_time:
+                    last_sent_time = current_time
+                    yield (b'--frame\r\n'
+                           b'Content-Type: image/jpeg\r\n'
+                           b'Content-Length: ' + str(len(current_frame)).encode() + b'\r\n\r\n' +
+                           current_frame + b'\r\n')
+                else:
+                    time.sleep(0.03)  # ~30fps max
                 
     except Exception as e:
         logger.info(f"Erreur flux vidéo: {e}")
-        # Envoyer une frame d'erreur
         error_msg = f"Erreur caméra: {str(e)}"
         yield (b'--frame\r\n'
                b'Content-Type: text/plain\r\n\r\n' +
                error_msg.encode() + b'\r\n')
     finally:
-        # Ne pas tuer le flux caméra si le mode aperçu est actif
-        # Évite l'arrêt intempestif du processus lors d'une déconnexion client ou d'un petit glitch
         global camera_active
         if not camera_active:
             stop_camera_process()
