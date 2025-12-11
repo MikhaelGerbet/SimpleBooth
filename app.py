@@ -246,6 +246,18 @@ def camera_status():
         'last_frame_age': current_time - last_frame_time if last_frame_time > 0 else -1
     })
 
+@app.route('/api/config')
+def get_public_config():
+    """Retourner la configuration publique pour le frontend"""
+    return jsonify({
+        'print_enabled': config.get('print_enabled', True),
+        'effect_enabled': config.get('effect_enabled', True),
+        'runware_api_key': bool(config.get('runware_api_key', '')),
+        'telegram_enabled': config.get('telegram_enabled', False),
+        'timer_seconds': config.get('timer_seconds', 5),
+        'slideshow_enabled': config.get('slideshow_enabled', True)
+    })
+
 @app.route('/capture', methods=['POST'])
 def capture_photo():
     """Capturer une photo haute résolution pour impression 15x10cm (300dpi)"""
@@ -343,6 +355,10 @@ def capture_photo():
         
         current_photo = filename
         original_photo = filename
+        
+        # Réinitialiser le compteur de générations IA pour la nouvelle photo
+        global ai_generation_count
+        ai_generation_count = 0
         
         # Envoyer sur Telegram si activé
         send_type = config.get('telegram_send_type', 'photos')
@@ -516,124 +532,170 @@ def delete_current_photo():
     
     return jsonify({'success': False, 'error': 'Aucune photo à supprimer'})
 
+# Compteur de générations IA par photo (reset à chaque nouvelle photo)
+ai_generation_count = 0
+MAX_AI_GENERATIONS = 5
+
 @app.route('/apply_effect', methods=['POST'])
 def apply_effect():
     """Appliquer un effet IA à la photo actuelle via Runware"""
-    global current_photo, original_photo
+    global current_photo, original_photo, ai_generation_count
     
-    # Utiliser la photo originale pour permettre la régénération
+    # Vérifier le compteur de générations
+    if ai_generation_count >= MAX_AI_GENERATIONS:
+        return jsonify({
+            'success': False, 
+            'error': f'Limite de {MAX_AI_GENERATIONS} générations atteinte pour cette photo',
+            'limit_reached': True,
+            'generation_count': ai_generation_count
+        })
+    
+    # Récupérer le prompt_id depuis la requête
+    data = request.get_json() or {}
+    prompt_id = data.get('prompt_id')
+    
+    if not prompt_id:
+        return jsonify({'success': False, 'error': 'Veuillez sélectionner un style'})
+    
+    # Trouver le prompt correspondant (utiliser les prompts par défaut si non configurés)
+    prompts = config.get('ai_prompts') or get_default_ai_prompts()
+    selected_prompt = None
+    for p in prompts:
+        if p['id'] == prompt_id and p.get('enabled', True):
+            selected_prompt = p
+            break
+    
+    if not selected_prompt:
+        return jsonify({'success': False, 'error': 'Style non trouvé ou désactivé'})
+    
+    # Utiliser la photo originale (SANS overlay) pour le traitement IA
     photo_to_process = original_photo if original_photo else current_photo
     
     if not photo_to_process:
         return jsonify({'success': False, 'error': 'Aucune photo à traiter'})
     
     if not config.get('effect_enabled', False):
-        return jsonify({'success': False, 'error': 'Les effets sont désactivés'})
+        return jsonify({'success': False, 'error': 'Les effets IA sont désactivés'})
     
     if not config.get('runware_api_key'):
         return jsonify({'success': False, 'error': 'Clé API Runware manquante'})
     
     try:
-        # Toujours utiliser la photo originale (dans PHOTOS_FOLDER)
+        # Utiliser la photo originale SANS overlay (dans PHOTOS_FOLDER)
         photo_path = os.path.join(PHOTOS_FOLDER, photo_to_process)
         
         if not os.path.exists(photo_path):
             return jsonify({'success': False, 'error': 'Photo originale introuvable'})
         
-        logger.info(f"[IA] Régénération depuis la photo originale: {photo_to_process}")
-        result = asyncio.run(apply_effect_runware(photo_path))
+        logger.info(f"[IA] Génération {ai_generation_count + 1}/{MAX_AI_GENERATIONS} avec style: {selected_prompt['name']}")
+        result = asyncio.run(apply_effect_runware(photo_path, selected_prompt))
+        
+        # Incrémenter le compteur si succès
+        result_data = result.get_json()
+        if result_data.get('success'):
+            ai_generation_count += 1
+            # Ajouter le compteur à la réponse
+            result_data['generation_count'] = ai_generation_count
+            result_data['max_generations'] = MAX_AI_GENERATIONS
+            result_data['limit_reached'] = ai_generation_count >= MAX_AI_GENERATIONS
+            return jsonify(result_data)
+        
         return result
             
     except Exception as e:
-        logger.info(f"Erreur lors de l'application de l'effet: {e}")
+        logger.error(f"Erreur lors de l'application de l'effet: {e}")
         return jsonify({'success': False, 'error': f'Erreur IA: {str(e)}'})
 
+@app.route('/api/ai_generation_status')
+def get_ai_generation_status():
+    """Récupérer le statut des générations IA pour la photo actuelle"""
+    return jsonify({
+        'generation_count': ai_generation_count,
+        'max_generations': MAX_AI_GENERATIONS,
+        'limit_reached': ai_generation_count >= MAX_AI_GENERATIONS
+    })
 
-async def apply_effect_runware(photo_path):
+
+async def apply_effect_runware(photo_path, prompt_config):
     """Fonction asynchrone pour appliquer l'effet IA via Runware"""
     global current_photo
     
     try:
-        logger.info("[DEBUG IA] Début de l'application de l'effet IA")
-        logger.info(f"[DEBUG IA] Photo source: {photo_path}")
-        logger.info(f"[DEBUG IA] Clé API configurée: {'Oui' if config.get('runware_api_key') else 'Non'}")
-        logger.info(f"[DEBUG IA] Prompt: {config.get('effect_prompt', 'Transform this photo into a beautiful ghibli style')}")
+        prompt_text = prompt_config['prompt']
+        prompt_name = prompt_config['name']
+        
+        logger.info(f"[IA] Début du traitement avec style: {prompt_name}")
+        logger.info(f"[IA] Photo source: {photo_path}")
         
         # Initialiser Runware
-        logger.info("[DEBUG IA] Initialisation de Runware...")
         runware = Runware(api_key=config['runware_api_key'])
-        logger.info("[DEBUG IA] Connexion à Runware...")
         await runware.connect()
-        logger.info("[DEBUG IA] Connexion établie avec succès")
+        logger.info("[IA] Connexion Runware établie")
         
         # Lire et encoder l'image en base64
-        logger.info("[DEBUG IA] Lecture et encodage de l'image...")
         with open(photo_path, 'rb') as img_file:
             img_data = img_file.read()
             img_base64 = base64.b64encode(img_data).decode('utf-8')
-        logger.info(f"[DEBUG IA] Image encodée: {len(img_base64)} caractères base64")
         
-        # Préparer la requête d'inférence avec referenceImages (requis pour ce modèle)
-        logger.info("[DEBUG IA] Préparation de la requête d'inférence avec referenceImages...")
+        # Résolution optimisée qualité/prix pour Canon SELPHY CP1500
+        # Ratio 1.48 (148x100mm) - Résolution haute qualité
+        # 2048x1384 = bon compromis qualité/vitesse/coût
+        AI_WIDTH = 2048
+        AI_HEIGHT = 1384
+        
+        # Préparer la requête d'inférence
         request = IImageInference(
-            positivePrompt=config.get('effect_prompt', 'Transforme cette image en illustration de style Studio Ghibli'),
+            positivePrompt=prompt_text,
             referenceImages=[f"data:image/jpeg;base64,{img_base64}"],
             model="runware:106@1",
-            height=752, 
-            width=1392,  
+            height=AI_HEIGHT, 
+            width=AI_WIDTH,  
             steps=config.get('effect_steps', 5),
             CFGScale=2.5,
             numberResults=1
         )
-        logger.info("[DEBUG IA] Requête préparée avec les paramètres de base:")
-        logger.info(f"[DEBUG IA]   - Modèle: runware:106@1")
-        logger.info(f"[DEBUG IA]   - Dimensions: 1392x752")
-        logger.info(f"[DEBUG IA]   - Étapes: {config.get('effect_steps', 5)}")
-        logger.info(f"[DEBUG IA]   - CFG Scale: 2.5")
-        logger.info(f"[DEBUG IA]   - Nombre de résultats: 1")
+        
+        logger.info(f"[IA] Requête préparée - {AI_WIDTH}x{AI_HEIGHT}, {config.get('effect_steps', 5)} étapes")
         
         # Appliquer l'effet
-        logger.info("[DEBUG IA] Envoi de la requête à l'API Runware...")
-        # La méthode correcte est imageInference
         images = await runware.imageInference(requestImage=request)
-        logger.info(f"[DEBUG IA] Réponse reçue: {len(images) if images else 0} image(s) générée(s)")
         
         if images and len(images) > 0:
             # Télécharger l'image transformée
-            logger.info(f"[DEBUG IA] URL de l'image générée: {images[0].imageURL}")
-            logger.info("[DEBUG IA] Téléchargement de l'image transformée...")
-            import requests
-            response = requests.get(images[0].imageURL)
-            logger.info(f"[DEBUG IA] Statut de téléchargement: {response.status_code}")
+            logger.info(f"[IA] Image générée, téléchargement...")
+            import requests as req
+            response = req.get(images[0].imageURL)
             
             if response.status_code == 200:
-                logger.info(f"[DEBUG IA] Taille de l'image téléchargée: {len(response.content)} bytes")
-                
-                # S'assurer que le dossier effet existe
-                logger.info(f"[DEBUG IA] Vérification du dossier effet: {EFFECT_FOLDER}")
                 os.makedirs(EFFECT_FOLDER, exist_ok=True)
-                logger.info(f"[DEBUG IA] Dossier effet existe: {os.path.exists(EFFECT_FOLDER)}")
                 
-                # Créer un nouveau nom de fichier pour l'image avec effet
+                # Créer un nom de fichier unique
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                effect_filename = f'effect_{timestamp}.jpg'
-                effect_path = os.path.join(EFFECT_FOLDER, effect_filename)
-                logger.info(f"[DEBUG IA] Sauvegarde vers: {effect_path}")
+                prompt_id = prompt_config['id']
                 
-                # Sauvegarder l'image avec effet
+                # Sauvegarder l'image SANS overlay d'abord
+                effect_filename_raw = f'effect_{prompt_id}_{timestamp}_raw.jpg'
+                effect_path_raw = os.path.join(EFFECT_FOLDER, effect_filename_raw)
+                with open(effect_path_raw, 'wb') as f:
+                    f.write(response.content)
+                logger.info(f"[IA] Image brute sauvegardée: {effect_filename_raw}")
+                
+                # Créer la version avec overlay
+                effect_filename = f'effect_{prompt_id}_{timestamp}.jpg'
+                effect_path = os.path.join(EFFECT_FOLDER, effect_filename)
+                
+                # Copier l'image brute comme base
                 with open(effect_path, 'wb') as f:
                     f.write(response.content)
-                logger.info("[DEBUG IA] Image sauvegardée avec succès")
                 
                 # Appliquer l'overlay si activé
                 if config.get('overlay_enabled', False) and config.get('current_overlay', ''):
-                    logger.info("[DEBUG IA] Application de l'overlay sur l'effet...")
+                    logger.info("[IA] Application de l'overlay...")
                     apply_overlay(effect_path)
                 
-                # Mettre à jour la photo actuelle
+                # Mettre à jour la photo actuelle (version avec overlay)
                 current_photo = effect_filename
-                logger.info(f"[DEBUG IA] Photo actuelle mise à jour: {current_photo}")
-                logger.info("[DEBUG IA] Effet appliqué avec succès!")
+                logger.info(f"[IA] Effet '{prompt_name}' appliqué avec succès!")
                 
                 # Envoyer sur Telegram si activé
                 send_type = config.get('telegram_send_type', 'photos')
@@ -642,19 +704,20 @@ async def apply_effect_runware(photo_path):
                 
                 return jsonify({
                     'success': True, 
-                    'message': 'Effet appliqué avec succès!',
+                    'message': f'Style "{prompt_name}" appliqué!',
                     'new_filename': effect_filename,
-                    'photo_path': f'effet/{effect_filename}'
+                    'photo_path': f'effet/{effect_filename}',
+                    'style_name': prompt_name
                 })
             else:
-                logger.info(f"[DEBUG IA] ERREUR: Échec du téléchargement (code {response.status_code})")
-                return jsonify({'success': False, 'error': 'Erreur lors du téléchargement de l\'image transformée'})
+                logger.error(f"[IA] Échec téléchargement: code {response.status_code}")
+                return jsonify({'success': False, 'error': 'Erreur lors du téléchargement'})
         else:
-            logger.info("[DEBUG IA] ERREUR: Aucune image générée par l'IA")
+            logger.error("[IA] Aucune image générée")
             return jsonify({'success': False, 'error': 'Aucune image générée par l\'IA'})
             
     except Exception as e:
-        logger.info(f"Erreur lors de l'application de l'effet: {e}")
+        logger.error(f"[IA] Erreur: {e}")
         return jsonify({'success': False, 'error': f'Erreur IA: {str(e)}'})
 
 
@@ -957,6 +1020,467 @@ def apply_overlay_to_current_photo():
             
     except Exception as e:
         logger.error(f"[OVERLAY] Erreur: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+# ============================================
+# GESTION DES PROMPTS IA
+# ============================================
+
+def get_default_ai_prompts():
+    """Retourne les prompts IA par défaut"""
+    return [
+        {
+            "id": "superhero",
+            "name": "Super-Héros",
+            "icon": "fa-mask",
+            "prompt": "Transform this photo into an Avengers superhero scene. Keep the faces exactly as they are, with identical facial features, skin tone, and expressions. Only add superhero costumes and elements around the body: Iron Man armor, Captain America suit with shield, Thor cape and armor, Black Widow tactical suit, or Spider-Man suit. Add dramatic Marvel cinematic lighting and epic background with city skyline. Maintain photorealistic quality for faces, only stylize the costumes and environment. Do not modify facial features in any way. Ultra high resolution, 8K quality.",
+            "enabled": True,
+            "order": 1
+        },
+        {
+            "id": "astronaut",
+            "name": "Astronaute",
+            "icon": "fa-rocket",
+            "prompt": "Transform this photo into an astronaut space scene. Keep the faces exactly as they are, with identical facial features, skin tone, and expressions visible through a realistic space helmet visor. Add authentic NASA-style spacesuit with detailed textures, patches, and equipment. Background should be outer space with Earth visible, stars, and perhaps the International Space Station. Maintain photorealistic quality for faces. Ultra high resolution, 8K quality, cinematic lighting.",
+            "enabled": True,
+            "order": 2
+        },
+        {
+            "id": "redcarpet",
+            "name": "Red Carpet",
+            "icon": "fa-star",
+            "prompt": "Transform this photo into a Hollywood red carpet glamour scene. Keep the faces exactly as they are, with identical facial features, skin tone, and expressions. Add elegant formal attire: stunning evening gowns or sharp tuxedos. Background should be a prestigious red carpet event with paparazzi flashes, velvet ropes, and movie premiere atmosphere. Add subtle professional makeup enhancement without changing facial structure. Ultra high resolution, 8K quality, professional photography lighting.",
+            "enabled": True,
+            "order": 3
+        },
+        {
+            "id": "popart",
+            "name": "Pop Art",
+            "icon": "fa-palette",
+            "prompt": "Transform this photo into Andy Warhol style pop art. Keep the facial features recognizable but apply bold pop art colors: bright pinks, yellows, blues, and oranges. Add Ben-Day dots pattern, bold outlines, and comic book style effects. Background should be divided into colorful panels like Warhol's famous portraits. Maintain the essence of the person while applying artistic stylization. High contrast, vibrant colors.",
+            "enabled": True,
+            "order": 4
+        },
+        {
+            "id": "pirate",
+            "name": "Pirate",
+            "icon": "fa-skull-crossbones",
+            "prompt": "Transform this photo into a pirate captain scene. Keep the faces exactly as they are, with identical facial features, skin tone, and expressions. Add authentic pirate costume: tricorn hat, weathered coat, bandana, and pirate accessories. Background should be a pirate ship deck with ocean, sails, and treasure. Add dramatic lighting like sunset on the sea. Maintain photorealistic quality for faces. Ultra high resolution, 8K quality.",
+            "enabled": True,
+            "order": 5
+        },
+        {
+            "id": "royalty",
+            "name": "Royauté",
+            "icon": "fa-crown",
+            "prompt": "Transform this photo into a royal portrait scene. Keep the faces exactly as they are, with identical facial features, skin tone, and expressions. Add regal attire: ornate royal robes, crown or tiara, jewels, and royal regalia. Background should be a magnificent throne room or palace interior with velvet drapes, golden decorations, and chandeliers. Renaissance painting style lighting. Maintain photorealistic quality for faces. Ultra high resolution, 8K quality.",
+            "enabled": True,
+            "order": 6
+        },
+        {
+            "id": "wizard",
+            "name": "Fantasy",
+            "icon": "fa-hat-wizard",
+            "prompt": "Transform this photo into a magical fantasy wizard scene. Keep the faces exactly as they are, with identical facial features, skin tone, and expressions. Add wizard robes, magical staff, and mystical accessories. Background should be an enchanted forest or magical castle with floating lights, magical particles, and mystical atmosphere. Add subtle magical glow effects around the person. Maintain photorealistic quality for faces. Ultra high resolution, 8K quality.",
+            "enabled": True,
+            "order": 7
+        },
+        {
+            "id": "christmas",
+            "name": "Noël",
+            "icon": "fa-snowflake",
+            "prompt": "Transform this photo into a magical Christmas scene. Keep the faces exactly as they are, with identical facial features, skin tone, and expressions. Add festive holiday attire: cozy Christmas sweaters, Santa hat, or elegant winter clothing. Background should be a warm Christmas setting with decorated tree, fireplace, snow falling outside window, and warm golden lighting. Add subtle snowflakes and holiday magic. Maintain photorealistic quality for faces. Ultra high resolution, 8K quality.",
+            "enabled": True,
+            "order": 8
+        },
+        {
+            "id": "tropical",
+            "name": "Tropical",
+            "icon": "fa-umbrella-beach",
+            "prompt": "Transform this photo into a tropical paradise beach scene. Keep the faces exactly as they are, with identical facial features, skin tone, and expressions. Add Hawaiian shirts, leis, sunglasses, or beach attire. Background should be a stunning tropical beach with palm trees, crystal clear turquoise water, white sand, and beautiful sunset. Add warm golden hour lighting. Maintain photorealistic quality for faces. Ultra high resolution, 8K quality.",
+            "enabled": True,
+            "order": 9
+        },
+        {
+            "id": "anime",
+            "name": "Anime",
+            "icon": "fa-yin-yang",
+            "prompt": "Transform this photo into beautiful Studio Ghibli anime style illustration. Convert the people into anime characters while maintaining their recognizable features, hairstyle, and expressions. Use soft watercolor-like textures, warm colors, and dreamy atmosphere typical of Hayao Miyazaki films. Background should be whimsical and magical with floating elements, soft clouds, or enchanted scenery. High quality anime illustration, vibrant but soft colors.",
+            "enabled": True,
+            "order": 10
+        }
+    ]
+
+def init_ai_prompts():
+    """Initialise les prompts IA si non existants"""
+    global config
+    if 'ai_prompts' not in config:
+        config['ai_prompts'] = get_default_ai_prompts()
+        save_config(config)
+    return config['ai_prompts']
+
+@app.route('/api/ai_prompts')
+def get_ai_prompts():
+    """Récupérer tous les prompts IA (pour le frontend)"""
+    prompts = config.get('ai_prompts', get_default_ai_prompts())
+    # Ne retourner que les prompts actifs pour le frontend public
+    active_prompts = [p for p in prompts if p.get('enabled', True)]
+    active_prompts.sort(key=lambda x: x.get('order', 999))
+    return jsonify({'success': True, 'prompts': active_prompts})
+
+@app.route('/api/ai_prompts/all')
+def get_all_ai_prompts():
+    """Récupérer tous les prompts IA (pour l'admin)"""
+    prompts = config.get('ai_prompts', get_default_ai_prompts())
+    prompts.sort(key=lambda x: x.get('order', 999))
+    return jsonify({'success': True, 'prompts': prompts})
+
+@app.route('/api/ai_prompts', methods=['POST'])
+def add_ai_prompt():
+    """Ajouter un nouveau prompt IA"""
+    global config
+    data = request.get_json()
+    
+    if not data.get('name') or not data.get('prompt'):
+        return jsonify({'success': False, 'error': 'Nom et prompt requis'})
+    
+    prompts = config.get('ai_prompts', [])
+    
+    # Générer un ID unique
+    import uuid
+    new_id = data.get('id', str(uuid.uuid4())[:8])
+    
+    # Trouver le prochain ordre
+    max_order = max([p.get('order', 0) for p in prompts], default=0)
+    
+    new_prompt = {
+        'id': new_id,
+        'name': data['name'],
+        'icon': data.get('icon', 'fa-magic'),
+        'prompt': data['prompt'],
+        'enabled': data.get('enabled', True),
+        'order': data.get('order', max_order + 1)
+    }
+    
+    prompts.append(new_prompt)
+    config['ai_prompts'] = prompts
+    save_config(config)
+    
+    return jsonify({'success': True, 'prompt': new_prompt})
+
+@app.route('/api/ai_prompts/<prompt_id>', methods=['PUT'])
+def update_ai_prompt(prompt_id):
+    """Mettre à jour un prompt IA"""
+    global config
+    data = request.get_json()
+    
+    prompts = config.get('ai_prompts', [])
+    
+    for i, p in enumerate(prompts):
+        if p['id'] == prompt_id:
+            prompts[i]['name'] = data.get('name', p['name'])
+            prompts[i]['icon'] = data.get('icon', p['icon'])
+            prompts[i]['prompt'] = data.get('prompt', p['prompt'])
+            prompts[i]['enabled'] = data.get('enabled', p['enabled'])
+            prompts[i]['order'] = data.get('order', p['order'])
+            
+            config['ai_prompts'] = prompts
+            save_config(config)
+            return jsonify({'success': True, 'prompt': prompts[i]})
+    
+    return jsonify({'success': False, 'error': 'Prompt non trouvé'})
+
+@app.route('/api/ai_prompts/<prompt_id>', methods=['DELETE'])
+def delete_ai_prompt(prompt_id):
+    """Supprimer un prompt IA"""
+    global config
+    
+    prompts = config.get('ai_prompts', [])
+    prompts = [p for p in prompts if p['id'] != prompt_id]
+    
+    config['ai_prompts'] = prompts
+    save_config(config)
+    
+    return jsonify({'success': True})
+
+@app.route('/api/ai_prompts/<prompt_id>/toggle', methods=['POST'])
+def toggle_ai_prompt(prompt_id):
+    """Activer/désactiver un prompt IA"""
+    global config
+    
+    prompts = config.get('ai_prompts', [])
+    
+    for i, p in enumerate(prompts):
+        if p['id'] == prompt_id:
+            prompts[i]['enabled'] = not prompts[i].get('enabled', True)
+            config['ai_prompts'] = prompts
+            save_config(config)
+            return jsonify({'success': True, 'enabled': prompts[i]['enabled']})
+    
+    return jsonify({'success': False, 'error': 'Prompt non trouvé'})
+
+@app.route('/api/ai_prompts/reset', methods=['POST'])
+def reset_ai_prompts():
+    """Réinitialiser les prompts IA par défaut"""
+    global config
+    config['ai_prompts'] = get_default_ai_prompts()
+    save_config(config)
+    return jsonify({'success': True, 'prompts': config['ai_prompts']})
+
+
+# ============================================
+# GESTION WIFI
+# ============================================
+
+def get_saved_wifi_networks():
+    """Récupérer les réseaux WiFi sauvegardés dans la config"""
+    return config.get('wifi_networks', [])
+
+def save_wifi_network(ssid, password):
+    """Sauvegarder un réseau WiFi dans la config"""
+    global config
+    networks = config.get('wifi_networks', [])
+    
+    # Mettre à jour si existe déjà, sinon ajouter
+    found = False
+    for i, net in enumerate(networks):
+        if net['ssid'] == ssid:
+            networks[i]['password'] = password
+            found = True
+            break
+    
+    if not found:
+        networks.append({'ssid': ssid, 'password': password})
+    
+    config['wifi_networks'] = networks
+    save_config(config)
+
+@app.route('/api/wifi/status')
+def get_wifi_status():
+    """Récupérer le statut WiFi actuel"""
+    try:
+        # Récupérer le réseau connecté
+        result = subprocess.run(
+            ['nmcli', '-t', '-f', 'ACTIVE,SSID,SIGNAL,SECURITY', 'dev', 'wifi'],
+            capture_output=True, text=True, timeout=10
+        )
+        
+        connected_ssid = None
+        signal = None
+        
+        for line in result.stdout.strip().split('\n'):
+            if line.startswith('yes:'):
+                parts = line.split(':')
+                if len(parts) >= 3:
+                    connected_ssid = parts[1]
+                    signal = parts[2]
+                    break
+        
+        # Récupérer l'IP
+        ip_result = subprocess.run(
+            ['hostname', '-I'],
+            capture_output=True, text=True, timeout=5
+        )
+        ip_address = ip_result.stdout.strip().split()[0] if ip_result.stdout.strip() else 'Non connecté'
+        
+        return jsonify({
+            'success': True,
+            'connected': connected_ssid is not None,
+            'ssid': connected_ssid,
+            'signal': signal,
+            'ip_address': ip_address
+        })
+    except Exception as e:
+        logger.error(f"[WIFI] Erreur statut: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/wifi/scan')
+def scan_wifi_networks():
+    """Scanner les réseaux WiFi disponibles"""
+    try:
+        # Forcer un rescan
+        subprocess.run(['nmcli', 'dev', 'wifi', 'rescan'], capture_output=True, timeout=10)
+        time.sleep(2)
+        
+        # Lister les réseaux
+        result = subprocess.run(
+            ['nmcli', '-t', '-f', 'SSID,SIGNAL,SECURITY,ACTIVE', 'dev', 'wifi', 'list'],
+            capture_output=True, text=True, timeout=15
+        )
+        
+        networks = []
+        seen_ssids = set()
+        
+        for line in result.stdout.strip().split('\n'):
+            if not line:
+                continue
+            parts = line.split(':')
+            if len(parts) >= 3:
+                ssid = parts[0].strip()
+                if ssid and ssid not in seen_ssids:
+                    seen_ssids.add(ssid)
+                    networks.append({
+                        'ssid': ssid,
+                        'signal': int(parts[1]) if parts[1].isdigit() else 0,
+                        'security': parts[2] if len(parts) > 2 else 'Open',
+                        'connected': parts[3] == 'yes' if len(parts) > 3 else False
+                    })
+        
+        # Trier par signal décroissant
+        networks.sort(key=lambda x: x['signal'], reverse=True)
+        
+        return jsonify({'success': True, 'networks': networks})
+    except Exception as e:
+        logger.error(f"[WIFI] Erreur scan: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/wifi/connect', methods=['POST'])
+def connect_wifi():
+    """Se connecter à un réseau WiFi"""
+    data = request.get_json()
+    ssid = data.get('ssid', '').strip()
+    password = data.get('password', '').strip()
+    save_network = data.get('save', True)
+    
+    if not ssid:
+        return jsonify({'success': False, 'error': 'SSID requis'})
+    
+    try:
+        logger.info(f"[WIFI] Connexion à {ssid}...")
+        
+        # Supprimer l'ancienne connexion si existe
+        subprocess.run(['nmcli', 'connection', 'delete', ssid], 
+                      capture_output=True, timeout=10)
+        
+        # Créer la nouvelle connexion
+        if password:
+            result = subprocess.run(
+                ['nmcli', 'dev', 'wifi', 'connect', ssid, 'password', password],
+                capture_output=True, text=True, timeout=30
+            )
+        else:
+            result = subprocess.run(
+                ['nmcli', 'dev', 'wifi', 'connect', ssid],
+                capture_output=True, text=True, timeout=30
+            )
+        
+        if result.returncode == 0:
+            logger.info(f"[WIFI] Connecté à {ssid}")
+            
+            # Sauvegarder si demandé
+            if save_network and password:
+                save_wifi_network(ssid, password)
+            
+            # Attendre et récupérer la nouvelle IP
+            time.sleep(3)
+            ip_result = subprocess.run(['hostname', '-I'], capture_output=True, text=True, timeout=5)
+            ip_address = ip_result.stdout.strip().split()[0] if ip_result.stdout.strip() else ''
+            
+            return jsonify({
+                'success': True,
+                'message': f'Connecté à {ssid}',
+                'ip_address': ip_address
+            })
+        else:
+            error_msg = result.stderr.strip() or 'Échec de connexion'
+            logger.error(f"[WIFI] Erreur: {error_msg}")
+            return jsonify({'success': False, 'error': error_msg})
+            
+    except subprocess.TimeoutExpired:
+        return jsonify({'success': False, 'error': 'Timeout de connexion'})
+    except Exception as e:
+        logger.error(f"[WIFI] Erreur connexion: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/wifi/saved')
+def get_saved_wifi():
+    """Récupérer les réseaux WiFi sauvegardés"""
+    networks = get_saved_wifi_networks()
+    # Ne pas exposer les mots de passe complets
+    safe_networks = []
+    for net in networks:
+        safe_networks.append({
+            'ssid': net['ssid'],
+            'has_password': bool(net.get('password'))
+        })
+    return jsonify({'success': True, 'networks': safe_networks})
+
+@app.route('/api/wifi/saved', methods=['POST'])
+def add_saved_wifi():
+    """Ajouter un réseau WiFi sauvegardé"""
+    data = request.get_json()
+    ssid = data.get('ssid', '').strip()
+    password = data.get('password', '').strip()
+    
+    if not ssid:
+        return jsonify({'success': False, 'error': 'SSID requis'})
+    
+    save_wifi_network(ssid, password)
+    return jsonify({'success': True})
+
+@app.route('/api/wifi/saved/<ssid>', methods=['DELETE'])
+def delete_saved_wifi(ssid):
+    """Supprimer un réseau WiFi sauvegardé"""
+    global config
+    networks = config.get('wifi_networks', [])
+    networks = [n for n in networks if n['ssid'] != ssid]
+    config['wifi_networks'] = networks
+    save_config(config)
+    return jsonify({'success': True})
+
+@app.route('/api/wifi/connect_saved', methods=['POST'])
+def connect_saved_wifi():
+    """Se connecter à un réseau WiFi sauvegardé"""
+    data = request.get_json()
+    ssid = data.get('ssid', '').strip()
+    
+    if not ssid:
+        return jsonify({'success': False, 'error': 'SSID requis'})
+    
+    # Chercher le mot de passe sauvegardé
+    networks = get_saved_wifi_networks()
+    password = None
+    for net in networks:
+        if net['ssid'] == ssid:
+            password = net.get('password', '')
+            break
+    
+    if password is None:
+        return jsonify({'success': False, 'error': 'Réseau non trouvé dans les configs sauvegardées'})
+    
+    # Utiliser la fonction de connexion existante
+    try:
+        logger.info(f"[WIFI] Connexion au réseau sauvegardé: {ssid}")
+        
+        subprocess.run(['nmcli', 'connection', 'delete', ssid], capture_output=True, timeout=10)
+        
+        if password:
+            result = subprocess.run(
+                ['nmcli', 'dev', 'wifi', 'connect', ssid, 'password', password],
+                capture_output=True, text=True, timeout=30
+            )
+        else:
+            result = subprocess.run(
+                ['nmcli', 'dev', 'wifi', 'connect', ssid],
+                capture_output=True, text=True, timeout=30
+            )
+        
+        if result.returncode == 0:
+            time.sleep(3)
+            ip_result = subprocess.run(['hostname', '-I'], capture_output=True, text=True, timeout=5)
+            ip_address = ip_result.stdout.strip().split()[0] if ip_result.stdout.strip() else ''
+            
+            return jsonify({
+                'success': True,
+                'message': f'Connecté à {ssid}',
+                'ip_address': ip_address
+            })
+        else:
+            return jsonify({'success': False, 'error': result.stderr.strip() or 'Échec de connexion'})
+            
+    except Exception as e:
+        logger.error(f"[WIFI] Erreur: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
 

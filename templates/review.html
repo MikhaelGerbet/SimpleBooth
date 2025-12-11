@@ -40,6 +40,35 @@
     .status-indicator { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); padding: 0.75rem 1.5rem; border-radius: 30px; color: white; font-size: 0.9rem; z-index: 10; backdrop-filter: blur(10px); display: none; }
     .status-indicator.show { display: block; }
     .inactivity-bar { position: absolute; bottom: 0; left: 0; height: 4px; background: linear-gradient(90deg, #dc3545, #ff6b7a); width: 100%; transform-origin: left; }
+    
+    /* Styles pour popup IA - Uniformisé avec les autres modals */
+    .ai-popup { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; align-items: center; justify-content: center; z-index: 200; backdrop-filter: blur(10px); }
+    .ai-popup.show { display: flex; }
+    .ai-content { background: white; border-radius: 24px; padding: 2.5rem; text-align: center; max-width: 95vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+    .ai-content h3 { color: #333; margin-bottom: 0.5rem; font-size: 1.8rem; }
+    .ai-content .subtitle { color: #666; margin-bottom: 1rem; font-size: 1rem; }
+    .ai-styles-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+    .ai-style-btn { background: #f8f9fa; border: 2px solid #e9ecef; border-radius: 16px; padding: 1rem; cursor: pointer; transition: all 0.3s ease; display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
+    .ai-style-btn:hover { border-color: #9c27b0; transform: scale(1.05); background: #fff; box-shadow: 0 4px 15px rgba(156, 39, 176, 0.2); }
+    .ai-style-btn:active { transform: scale(0.95); }
+    .ai-style-btn.disabled { opacity: 0.4; pointer-events: none; }
+    .ai-style-btn i { font-size: 2rem; color: #9c27b0; }
+    .ai-style-btn span { color: #333; font-size: 0.85rem; font-weight: 500; }
+    .ai-counter { color: #666; font-size: 0.9rem; margin-bottom: 1rem; padding: 0.5rem 1rem; background: #f8f9fa; border-radius: 20px; display: inline-block; }
+    .ai-counter.warning { color: #dc3545; background: #fff5f5; }
+    .ai-close-btn { padding: 1rem 2.5rem; font-size: 1.1rem; background: #6c757d; color: white; border: none; border-radius: 50px; cursor: pointer; transition: all 0.2s; }
+    .ai-close-btn:hover { background: #5a6268; }
+    
+    /* Animation de chargement IA */
+    .ai-loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 300; }
+    .ai-loading-overlay.show { display: flex; }
+    .ai-loading-spinner { width: 80px; height: 80px; border: 4px solid rgba(156, 39, 176, 0.3); border-top: 4px solid #9c27b0; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 1.5rem; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .ai-loading-text { color: #fff; font-size: 1.3rem; margin-bottom: 0.5rem; }
+    .ai-loading-subtext { color: #aaa; font-size: 0.9rem; }
+    .ai-loading-progress { width: 200px; height: 4px; background: rgba(255,255,255,0.2); border-radius: 2px; margin-top: 1rem; overflow: hidden; }
+    .ai-loading-progress-bar { height: 100%; background: linear-gradient(90deg, #9c27b0, #e91e63); width: 0%; animation: progress 15s ease-out forwards; }
+    @keyframes progress { 0% { width: 0%; } 50% { width: 60%; } 80% { width: 85%; } 100% { width: 95%; } }
     </style>
     <div class="main-layout">
         <div class="photo-wrapper">
@@ -116,6 +145,31 @@
             </button>
         </div>
     </div>
+    
+    <!-- Popup sélection style IA -->
+    <div class="ai-popup" id="aiPopup">
+        <div class="ai-content">
+            <h3><i class="fas fa-magic me-2"></i>Choisissez un style</h3>
+            <p class="subtitle">Transformez votre photo avec l'intelligence artificielle</p>
+            <div class="ai-counter" id="aiCounter">0/5 générations utilisées</div>
+            <div class="ai-styles-grid" id="aiStylesGrid">
+                <!-- Les styles seront chargés dynamiquement -->
+            </div>
+            <button class="ai-close-btn" onclick="closeAIPopup()">
+                <i class="fas fa-times me-2"></i>Annuler
+            </button>
+        </div>
+    </div>
+    
+    <!-- Overlay de chargement IA -->
+    <div class="ai-loading-overlay" id="aiLoadingOverlay">
+        <div class="ai-loading-spinner"></div>
+        <div class="ai-loading-text" id="aiLoadingText">Génération en cours...</div>
+        <div class="ai-loading-subtext" id="aiLoadingSubtext">Transformation de votre photo</div>
+        <div class="ai-loading-progress">
+            <div class="ai-loading-progress-bar" id="aiProgressBar"></div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -185,33 +239,151 @@ function checkPrinterConfig() {
 
 function checkAIConfig() {
     fetch('/api/config').then(r => r.json()).then(data => {
-        if (!data.effect_enabled || !data.runware_api_key) document.getElementById('aiBtn').style.display = 'none';
+        if (!data.effect_enabled || !data.runware_api_key) {
+            document.getElementById('aiBtn').style.display = 'none';
+        } else {
+            // Charger les styles IA disponibles
+            loadAIStyles();
+            loadAIGenerationStatus();
+        }
+    });
+}
+
+// Variables pour la gestion IA
+let aiStyles = [];
+let aiGenerationCount = 0;
+const MAX_AI_GENERATIONS = 5;
+
+function loadAIStyles() {
+    fetch('/api/ai_prompts')
+        .then(r => r.json())
+        .then(data => {
+            if (data.success && data.prompts) {
+                aiStyles = data.prompts;
+                renderAIStylesGrid();
+            }
+        })
+        .catch(err => console.error('Erreur chargement styles IA:', err));
+}
+
+function loadAIGenerationStatus() {
+    fetch('/api/ai_generation_status')
+        .then(r => r.json())
+        .then(data => {
+            aiGenerationCount = data.generation_count || 0;
+            updateAICounter();
+        })
+        .catch(err => console.error('Erreur statut IA:', err));
+}
+
+function updateAICounter() {
+    const counter = document.getElementById('aiCounter');
+    counter.textContent = `${aiGenerationCount}/${MAX_AI_GENERATIONS} générations utilisées`;
+    if (aiGenerationCount >= MAX_AI_GENERATIONS) {
+        counter.classList.add('warning');
+        counter.textContent += ' - Limite atteinte';
+    } else {
+        counter.classList.remove('warning');
+    }
+}
+
+function renderAIStylesGrid() {
+    const grid = document.getElementById('aiStylesGrid');
+    grid.innerHTML = '';
+    
+    aiStyles.forEach(style => {
+        const btn = document.createElement('button');
+        btn.className = 'ai-style-btn';
+        if (aiGenerationCount >= MAX_AI_GENERATIONS) {
+            btn.classList.add('disabled');
+        }
+        btn.innerHTML = `
+            <i class="fas ${style.icon}"></i>
+            <span>${style.name}</span>
+        `;
+        btn.onclick = () => selectAIStyle(style.id, style.name);
+        grid.appendChild(btn);
     });
 }
 
 function applyAIEffect() {
-    if (!currentPhotoPath) { showStatus('Aucune photo'); return; }
-    showStatus('Application de l\'effet IA...');
-    document.getElementById('aiBtn').disabled = true;
-    fetch('/apply_effect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ photo_path: currentPhotoPath }) })
-        .then(r => r.json())
-        .then(data => {
-            document.getElementById('aiBtn').disabled = false;
-            if (data.success) {
-                showStatus('Effet IA appliqué !');
-                // Recharger la photo avec le nouvel effet
-                if (data.photo_path) {
-                    currentPhotoPath = data.photo_path;
-                    document.getElementById('photoPreview').src = '/' + data.photo_path + '?t=' + Date.now();
-                }
+    if (!currentPhotoPath) { 
+        showStatus('Aucune photo'); 
+        return; 
+    }
+    
+    // Vérifier la limite
+    if (aiGenerationCount >= MAX_AI_GENERATIONS) {
+        showStatus('Limite de générations atteinte');
+        return;
+    }
+    
+    // Ouvrir le popup de sélection
+    document.getElementById('aiPopup').classList.add('show');
+    resetInactivityTimer();
+}
+
+function closeAIPopup() {
+    document.getElementById('aiPopup').classList.remove('show');
+}
+
+function selectAIStyle(styleId, styleName) {
+    closeAIPopup();
+    
+    // Afficher l'overlay de chargement
+    document.getElementById('aiLoadingText').textContent = 'Génération en cours...';
+    document.getElementById('aiLoadingSubtext').textContent = `Style: ${styleName}`;
+    document.getElementById('aiProgressBar').style.animation = 'none';
+    setTimeout(() => {
+        document.getElementById('aiProgressBar').style.animation = 'progress 15s ease-out forwards';
+    }, 10);
+    document.getElementById('aiLoadingOverlay').classList.add('show');
+    
+    // Envoyer la requête
+    fetch('/apply_effect', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ prompt_id: styleId }) 
+    })
+    .then(r => r.json())
+    .then(data => {
+        document.getElementById('aiLoadingOverlay').classList.remove('show');
+        
+        if (data.success) {
+            showStatus(`Style "${data.style_name}" appliqué !`);
+            
+            // Mettre à jour le compteur
+            aiGenerationCount = data.generation_count || (aiGenerationCount + 1);
+            updateAICounter();
+            renderAIStylesGrid();
+            
+            // Recharger la photo avec le nouvel effet
+            if (data.photo_path) {
+                currentPhotoPath = data.photo_path;
+                document.getElementById('photoPreview').src = '/' + data.photo_path + '?t=' + Date.now();
+            }
+            
+            // Vérifier si limite atteinte
+            if (data.limit_reached) {
+                showStatus('Limite de générations atteinte');
+            }
+        } else {
+            if (data.limit_reached) {
+                showStatus('Limite de 5 générations atteinte');
+                aiGenerationCount = MAX_AI_GENERATIONS;
+                updateAICounter();
+                renderAIStylesGrid();
             } else {
                 showStatus(data.error || 'Erreur IA');
             }
-        })
-        .catch(err => {
-            document.getElementById('aiBtn').disabled = false;
-            showStatus('Erreur de connexion');
-        });
+        }
+    })
+    .catch(err => {
+        document.getElementById('aiLoadingOverlay').classList.remove('show');
+        showStatus('Erreur de connexion');
+        console.error('Erreur IA:', err);
+    });
+    
     resetInactivityTimer();
 }
 

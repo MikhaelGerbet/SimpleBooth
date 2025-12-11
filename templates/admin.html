@@ -282,7 +282,7 @@
             </div>
             <div class="card-body">
                 <div class="row">
-                    <div class="col-md-12">
+                    <div class="col-md-6">
                         <div class="mb-3">
                             <label class="form-label fw-bold">
                                 <i class="fas fa-toggle-on me-2 text-warning"></i>Activation des effets
@@ -298,22 +298,6 @@
                                 </label>
                             </div>
                             <div class="form-text">Permet d'appliquer des effets artistiques aux photos capturées</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="effect_prompt" class="form-label fw-bold">
-                                <i class="fas fa-wand-magic-sparkles me-2 text-warning"></i>Prompt d'effet
-                            </label>
-                            <textarea class="form-control" 
-                                      id="effect_prompt" 
-                                      name="effect_prompt" 
-                                      rows="3"
-                                      placeholder="Ex: Transform this photo into a beautiful artistic painting with vibrant colors">{{ config.effect_prompt }}</textarea>
-                            <div class="form-text">Description de l'effet à appliquer (en anglais)</div>
                         </div>
                     </div>
                     
@@ -351,6 +335,107 @@
                                    placeholder="5">
                             <div class="form-text">Nombre d'étapes de génération (1-50, plus = meilleure qualité mais plus lent)</div>
                         </div>
+                    </div>
+                </div>
+                
+                <!-- Gestion des styles IA -->
+                <hr class="my-4">
+                <div class="row">
+                    <div class="col-12">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="mb-0"><i class="fas fa-palette me-2"></i>Styles IA disponibles</h5>
+                            <div>
+                                <button type="button" class="btn btn-outline-warning btn-sm me-2" onclick="resetAIPrompts()">
+                                    <i class="fas fa-undo me-1"></i>Réinitialiser
+                                </button>
+                                <button type="button" class="btn btn-warning btn-sm" onclick="showAddPromptModal()">
+                                    <i class="fas fa-plus me-1"></i>Ajouter un style
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div id="aiPromptsContainer" class="table-responsive">
+                            <table class="table table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 50px;">Ordre</th>
+                                        <th style="width: 60px;">Icône</th>
+                                        <th style="width: 150px;">Nom</th>
+                                        <th>Prompt</th>
+                                        <th style="width: 80px;">Actif</th>
+                                        <th style="width: 120px;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="aiPromptsTableBody">
+                                    <!-- Chargé dynamiquement -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="aiPromptsLoading" class="text-center py-4">
+                            <i class="fas fa-spinner fa-spin fa-2x text-warning"></i>
+                            <p class="mt-2 text-muted">Chargement des styles...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Modal Ajout/Edition Prompt -->
+        <div class="modal fade" id="promptModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header bg-warning text-dark">
+                        <h5 class="modal-title" id="promptModalTitle"><i class="fas fa-magic me-2"></i>Nouveau style IA</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" id="promptEditId">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="promptName" class="form-label fw-bold">Nom du style</label>
+                                    <input type="text" class="form-control" id="promptName" placeholder="Ex: Super-Héros">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="promptIcon" class="form-label fw-bold">Icône FontAwesome</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i id="promptIconPreview" class="fas fa-magic"></i></span>
+                                        <input type="text" class="form-control" id="promptIcon" placeholder="fa-mask" oninput="updateIconPreview()">
+                                    </div>
+                                    <div class="form-text">Ex: fa-mask, fa-rocket, fa-star, fa-crown...</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="promptText" class="form-label fw-bold">Prompt (en anglais)</label>
+                            <textarea class="form-control" id="promptText" rows="6" placeholder="Transform this photo into..."></textarea>
+                            <div class="form-text">Description détaillée de la transformation souhaitée</div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="promptOrder" class="form-label fw-bold">Ordre d'affichage</label>
+                                    <input type="number" class="form-control" id="promptOrder" value="1" min="1">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Statut</label>
+                                    <div class="form-check form-switch mt-2">
+                                        <input class="form-check-input" type="checkbox" id="promptEnabled" checked>
+                                        <label class="form-check-label" for="promptEnabled">Actif</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                        <button type="button" class="btn btn-warning" onclick="savePrompt()">
+                            <i class="fas fa-save me-1"></i>Enregistrer
+                        </button>
                     </div>
                 </div>
             </div>
@@ -434,6 +519,117 @@
                             <i class="fas fa-info-circle me-2"></i>
                             Aucun overlay actif. Sélectionnez un overlay dans la galerie ci-dessus.
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Configuration WiFi -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-wifi me-2"></i>Configuration WiFi
+                </h5>
+            </div>
+            <div class="card-body">
+                <!-- Statut actuel -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="alert alert-info d-flex justify-content-between align-items-center mb-0" id="wifiStatusAlert">
+                            <div id="wifiStatusContent">
+                                <i class="fas fa-spinner fa-spin me-2"></i>
+                                <strong>Statut:</strong> <span>Chargement...</span>
+                            </div>
+                            <button type="button" class="btn btn-outline-light btn-sm" onclick="refreshWifiStatus()">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <!-- Réseaux sauvegardés -->
+                    <div class="col-md-6 mb-3">
+                        <h6 class="fw-bold mb-3"><i class="fas fa-bookmark me-2 text-primary"></i>Réseaux sauvegardés</h6>
+                        <div id="savedWifiList" class="list-group mb-3" style="max-height: 250px; overflow-y: auto;">
+                            <p class="text-muted text-center py-3">Chargement...</p>
+                        </div>
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="showAddWifiModal()">
+                            <i class="fas fa-plus me-1"></i>Ajouter un réseau
+                        </button>
+                    </div>
+                    
+                    <!-- Réseaux disponibles -->
+                    <div class="col-md-6 mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="fw-bold mb-0"><i class="fas fa-broadcast-tower me-2 text-primary"></i>Réseaux disponibles</h6>
+                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="scanWifiNetworks()">
+                                <i class="fas fa-search me-1"></i>Scanner
+                            </button>
+                        </div>
+                        <div id="wifiScanResults" style="max-height: 250px; overflow-y: auto;">
+                            <p class="text-muted text-center py-3">Cliquez sur "Scanner" pour voir les réseaux</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Modal Ajout WiFi -->
+        <div class="modal fade" id="addWifiModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title"><i class="fas fa-wifi me-2"></i>Ajouter un réseau WiFi</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="addWifiSsid" class="form-label fw-bold">Nom du réseau (SSID)</label>
+                            <input type="text" class="form-control" id="addWifiSsid" placeholder="MonWiFi">
+                        </div>
+                        <div class="mb-3">
+                            <label for="addWifiPassword" class="form-label fw-bold">Mot de passe</label>
+                            <input type="password" class="form-control" id="addWifiPassword" placeholder="••••••••">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                        <button type="button" class="btn btn-primary" onclick="addSavedWifi()">
+                            <i class="fas fa-save me-1"></i>Sauvegarder
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Modal Connexion WiFi -->
+        <div class="modal fade" id="connectWifiModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title"><i class="fas fa-link me-2"></i>Connexion WiFi</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Connexion au réseau: <strong id="connectWifiSsidDisplay"></strong></p>
+                        <input type="hidden" id="connectWifiSsid">
+                        <div class="mb-3" id="connectWifiPasswordGroup">
+                            <label for="connectWifiPassword" class="form-label fw-bold">Mot de passe</label>
+                            <input type="password" class="form-control" id="connectWifiPassword" placeholder="••••••••">
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="connectWifiSave" checked>
+                            <label class="form-check-label" for="connectWifiSave">
+                                Sauvegarder ce réseau
+                            </label>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                        <button type="button" class="btn btn-primary" id="connectWifiBtn" onclick="connectToWifi()">
+                            <i class="fas fa-plug me-1"></i>Connecter
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1056,6 +1252,478 @@
 
 {% block scripts %}
 <script>
+// ============================================
+// GESTION DES PROMPTS IA
+// ============================================
+
+let aiPrompts = [];
+let promptModal = null;
+
+// Charger les prompts au démarrage
+document.addEventListener('DOMContentLoaded', function() {
+    loadAIPrompts();
+    promptModal = new bootstrap.Modal(document.getElementById('promptModal'));
+    
+    // Initialiser le WiFi si la section existe
+    if (document.getElementById('networksList')) {
+        loadWifiStatus();
+        loadSavedNetworks();
+        startWifiStatusRefresh();
+    }
+});
+
+function loadAIPrompts() {
+    document.getElementById('aiPromptsLoading').style.display = 'block';
+    document.getElementById('aiPromptsContainer').style.display = 'none';
+    
+    fetch('/api/ai_prompts/all')
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                aiPrompts = data.prompts;
+                renderAIPromptsTable();
+            }
+            document.getElementById('aiPromptsLoading').style.display = 'none';
+            document.getElementById('aiPromptsContainer').style.display = 'block';
+        })
+        .catch(err => {
+            console.error('Erreur chargement prompts:', err);
+            document.getElementById('aiPromptsLoading').innerHTML = '<p class="text-danger">Erreur de chargement</p>';
+        });
+}
+
+function renderAIPromptsTable() {
+    const tbody = document.getElementById('aiPromptsTableBody');
+    tbody.innerHTML = '';
+    
+    if (aiPrompts.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Aucun style configuré</td></tr>';
+        return;
+    }
+    
+    aiPrompts.sort((a, b) => (a.order || 0) - (b.order || 0));
+    
+    aiPrompts.forEach(prompt => {
+        const tr = document.createElement('tr');
+        tr.className = prompt.enabled ? '' : 'table-secondary';
+        tr.innerHTML = `
+            <td class="text-center">${prompt.order || '-'}</td>
+            <td class="text-center"><i class="fas ${prompt.icon} fa-lg text-warning"></i></td>
+            <td><strong>${prompt.name}</strong></td>
+            <td><small class="text-muted">${prompt.prompt.substring(0, 100)}...</small></td>
+            <td class="text-center">
+                <div class="form-check form-switch d-inline-block">
+                    <input class="form-check-input" type="checkbox" ${prompt.enabled ? 'checked' : ''} 
+                           onchange="togglePrompt('${prompt.id}')">
+                </div>
+            </td>
+            <td>
+                <button class="btn btn-sm btn-outline-primary me-1" onclick="editPrompt('${prompt.id}')" title="Modifier">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deletePrompt('${prompt.id}')" title="Supprimer">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function showAddPromptModal() {
+    document.getElementById('promptModalTitle').innerHTML = '<i class="fas fa-plus me-2"></i>Nouveau style IA';
+    document.getElementById('promptEditId').value = '';
+    document.getElementById('promptName').value = '';
+    document.getElementById('promptIcon').value = 'fa-magic';
+    document.getElementById('promptText').value = '';
+    document.getElementById('promptOrder').value = aiPrompts.length + 1;
+    document.getElementById('promptEnabled').checked = true;
+    updateIconPreview();
+    promptModal.show();
+}
+
+function editPrompt(promptId) {
+    const prompt = aiPrompts.find(p => p.id === promptId);
+    if (!prompt) return;
+    
+    document.getElementById('promptModalTitle').innerHTML = '<i class="fas fa-edit me-2"></i>Modifier le style';
+    document.getElementById('promptEditId').value = prompt.id;
+    document.getElementById('promptName').value = prompt.name;
+    document.getElementById('promptIcon').value = prompt.icon;
+    document.getElementById('promptText').value = prompt.prompt;
+    document.getElementById('promptOrder').value = prompt.order || 1;
+    document.getElementById('promptEnabled').checked = prompt.enabled;
+    updateIconPreview();
+    promptModal.show();
+}
+
+function savePrompt() {
+    const editId = document.getElementById('promptEditId').value;
+    const data = {
+        name: document.getElementById('promptName').value.trim(),
+        icon: document.getElementById('promptIcon').value.trim() || 'fa-magic',
+        prompt: document.getElementById('promptText').value.trim(),
+        order: parseInt(document.getElementById('promptOrder').value) || 1,
+        enabled: document.getElementById('promptEnabled').checked
+    };
+    
+    if (!data.name || !data.prompt) {
+        alert('Le nom et le prompt sont obligatoires');
+        return;
+    }
+    
+    const url = editId ? `/api/ai_prompts/${editId}` : '/api/ai_prompts';
+    const method = editId ? 'PUT' : 'POST';
+    
+    fetch(url, {
+        method: method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    })
+    .then(r => r.json())
+    .then(result => {
+        if (result.success) {
+            promptModal.hide();
+            loadAIPrompts();
+        } else {
+            alert('Erreur: ' + (result.error || 'Impossible de sauvegarder'));
+        }
+    })
+    .catch(err => {
+        alert('Erreur de connexion');
+        console.error(err);
+    });
+}
+
+function deletePrompt(promptId) {
+    const prompt = aiPrompts.find(p => p.id === promptId);
+    if (!confirm(`Supprimer le style "${prompt?.name}" ?`)) return;
+    
+    fetch(`/api/ai_prompts/${promptId}`, { method: 'DELETE' })
+        .then(r => r.json())
+        .then(result => {
+            if (result.success) {
+                loadAIPrompts();
+            } else {
+                alert('Erreur: ' + (result.error || 'Impossible de supprimer'));
+            }
+        })
+        .catch(err => {
+            alert('Erreur de connexion');
+            console.error(err);
+        });
+}
+
+function togglePrompt(promptId) {
+    fetch(`/api/ai_prompts/${promptId}/toggle`, { method: 'POST' })
+        .then(r => r.json())
+        .then(result => {
+            if (result.success) {
+                loadAIPrompts();
+            }
+        })
+        .catch(err => console.error(err));
+}
+
+function resetAIPrompts() {
+    if (!confirm('Réinitialiser tous les styles IA aux valeurs par défaut ?\n\nCette action supprimera tous vos styles personnalisés.')) return;
+    
+    fetch('/api/ai_prompts/reset', { method: 'POST' })
+        .then(r => r.json())
+        .then(result => {
+            if (result.success) {
+                loadAIPrompts();
+            } else {
+                alert('Erreur: ' + (result.error || 'Impossible de réinitialiser'));
+            }
+        })
+        .catch(err => {
+            alert('Erreur de connexion');
+            console.error(err);
+        });
+}
+
+function updateIconPreview() {
+    const icon = document.getElementById('promptIcon').value.trim() || 'fa-magic';
+    document.getElementById('promptIconPreview').className = 'fas ' + icon;
+}
+
+// ============================================
+// GESTION DU WIFI
+// ============================================
+
+let addWifiModal = null;
+let connectWifiModal = null;
+
+// Initialiser les modals WiFi
+function initWifiModals() {
+    const addModalEl = document.getElementById('addWifiModal');
+    const connectModalEl = document.getElementById('connectWifiModal');
+    if (addModalEl) addWifiModal = new bootstrap.Modal(addModalEl);
+    if (connectModalEl) connectWifiModal = new bootstrap.Modal(connectModalEl);
+}
+
+// Scanner les réseaux WiFi disponibles
+function scanWifiNetworks() {
+    const container = document.getElementById('wifiScanResults');
+    if (!container) return;
+    
+    container.innerHTML = '<div class="text-center py-3"><i class="fas fa-spinner fa-spin me-2"></i>Scan en cours...</div>';
+    
+    fetch('/api/wifi/scan')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.networks) {
+                if (data.networks.length === 0) {
+                    container.innerHTML = '<div class="text-muted text-center py-3">Aucun réseau trouvé</div>';
+                } else {
+                    let html = '<div class="list-group list-group-flush">';
+                    data.networks.forEach(network => {
+                        const signalClass = network.signal >= 70 ? 'text-success' : 
+                                           (network.signal >= 40 ? 'text-warning' : 'text-danger');
+                        const secureIcon = network.security ? '<i class="fas fa-lock text-muted ms-1" title="Sécurisé"></i>' : '';
+                        const connectedBadge = network.connected ? '<span class="badge bg-success ms-2">Connecté</span>' : '';
+                        
+                        html += `
+                            <div class="list-group-item d-flex justify-content-between align-items-center py-2">
+                                <div>
+                                    <i class="fas fa-wifi ${signalClass} me-2"></i>
+                                    <strong>${network.ssid || '(Réseau masqué)'}</strong>
+                                    ${secureIcon}${connectedBadge}
+                                    <small class="text-muted d-block ms-4">${network.signal}% - ${network.security || 'Ouvert'}</small>
+                                </div>
+                                ${!network.connected ? `<button type="button" class="btn btn-sm btn-outline-primary" onclick="showConnectWifiModal('${network.ssid}', ${!!network.security})">
+                                    <i class="fas fa-plug"></i>
+                                </button>` : ''}
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                    container.innerHTML = html;
+                }
+            } else {
+                container.innerHTML = '<div class="text-danger text-center py-3"><i class="fas fa-exclamation-triangle me-2"></i>' + (data.error || 'Erreur lors du scan') + '</div>';
+            }
+        })
+        .catch(err => {
+            container.innerHTML = '<div class="text-danger text-center py-3"><i class="fas fa-exclamation-triangle me-2"></i>Erreur de connexion</div>';
+            console.error('Erreur scan WiFi:', err);
+        });
+}
+
+// Afficher le modal de connexion
+function showConnectWifiModal(ssid, requiresPassword) {
+    document.getElementById('connectWifiSsid').value = ssid;
+    document.getElementById('connectWifiSsidDisplay').textContent = ssid;
+    document.getElementById('connectWifiPassword').value = '';
+    document.getElementById('connectWifiPasswordGroup').style.display = requiresPassword ? 'block' : 'none';
+    if (connectWifiModal) connectWifiModal.show();
+}
+
+// Connecter au réseau depuis le modal
+function connectToWifi() {
+    const ssid = document.getElementById('connectWifiSsid').value;
+    const password = document.getElementById('connectWifiPassword').value;
+    const saveNetwork = document.getElementById('connectWifiSave').checked;
+    
+    const btn = document.getElementById('connectWifiBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Connexion...';
+    
+    fetch('/api/wifi/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ssid: ssid, password: password })
+    })
+    .then(response => response.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-plug me-1"></i>Connecter';
+        
+        if (data.success) {
+            if (connectWifiModal) connectWifiModal.hide();
+            refreshWifiStatus();
+            scanWifiNetworks();
+            
+            // Sauvegarder si demandé
+            if (saveNetwork && password) {
+                saveWifiNetwork(ssid, password);
+            }
+            
+            alert('Connecté à "' + ssid + '" !');
+        } else {
+            alert('Erreur: ' + (data.error || 'Échec de la connexion'));
+        }
+    })
+    .catch(err => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-plug me-1"></i>Connecter';
+        alert('Erreur de connexion');
+        console.error('Erreur connexion WiFi:', err);
+    });
+}
+
+// Afficher le modal d'ajout
+function showAddWifiModal() {
+    document.getElementById('addWifiSsid').value = '';
+    document.getElementById('addWifiPassword').value = '';
+    if (addWifiModal) addWifiModal.show();
+}
+
+// Ajouter un réseau sauvegardé
+function addSavedWifi() {
+    const ssid = document.getElementById('addWifiSsid').value.trim();
+    const password = document.getElementById('addWifiPassword').value;
+    
+    if (!ssid) {
+        alert('Veuillez entrer un nom de réseau');
+        return;
+    }
+    
+    saveWifiNetwork(ssid, password);
+    if (addWifiModal) addWifiModal.hide();
+}
+
+// Sauvegarder un réseau
+function saveWifiNetwork(ssid, password) {
+    fetch('/api/wifi/saved', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ssid: ssid, password: password })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            loadSavedNetworks();
+        } else {
+            alert('Erreur: ' + (data.error || 'Impossible de sauvegarder'));
+        }
+    })
+    .catch(err => {
+        console.error('Erreur sauvegarde WiFi:', err);
+    });
+}
+
+// Charger les réseaux sauvegardés
+function loadSavedNetworks() {
+    const container = document.getElementById('savedWifiList');
+    if (!container) return;
+    
+    fetch('/api/wifi/saved')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.networks && data.networks.length > 0) {
+                let html = '';
+                data.networks.forEach(net => {
+                    html += `
+                        <div class="list-group-item d-flex justify-content-between align-items-center py-2">
+                            <div>
+                                <i class="fas fa-wifi text-primary me-2"></i>
+                                <strong>${net.ssid}</strong>
+                                ${net.has_password ? '<i class="fas fa-lock text-muted ms-1"></i>' : ''}
+                            </div>
+                            <div>
+                                <button type="button" class="btn btn-sm btn-outline-success me-1" onclick="connectToSavedNetwork('${net.ssid}')" title="Connecter">
+                                    <i class="fas fa-plug"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteSavedNetwork('${net.ssid}')" title="Supprimer">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                });
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = '<p class="text-muted text-center py-3">Aucun réseau sauvegardé</p>';
+            }
+        })
+        .catch(err => {
+            container.innerHTML = '<p class="text-danger text-center py-3">Erreur de chargement</p>';
+            console.error('Erreur chargement réseaux:', err);
+        });
+}
+
+// Connecter à un réseau sauvegardé
+function connectToSavedNetwork(ssid) {
+    const statusAlert = document.getElementById('wifiStatusAlert');
+    statusAlert.className = 'alert alert-warning d-flex justify-content-between align-items-center mb-0';
+    document.getElementById('wifiStatusContent').innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i><strong>Connexion à ' + ssid + '...</strong>';
+    
+    fetch('/api/wifi/connect_saved', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ssid: ssid })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            refreshWifiStatus();
+            scanWifiNetworks();
+        } else {
+            alert('Erreur: ' + (data.error || 'Échec de la connexion'));
+            refreshWifiStatus();
+        }
+    })
+    .catch(err => {
+        alert('Erreur de connexion');
+        refreshWifiStatus();
+        console.error('Erreur connexion WiFi:', err);
+    });
+}
+
+// Supprimer un réseau sauvegardé
+function deleteSavedNetwork(ssid) {
+    if (!confirm('Supprimer le réseau "' + ssid + '" ?')) return;
+    
+    fetch('/api/wifi/saved/' + encodeURIComponent(ssid), { method: 'DELETE' })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                loadSavedNetworks();
+            } else {
+                alert('Erreur: ' + (data.error || 'Impossible de supprimer'));
+            }
+        })
+        .catch(err => {
+            alert('Erreur de connexion');
+            console.error('Erreur suppression WiFi:', err);
+        });
+}
+
+// Rafraîchir le statut WiFi
+function refreshWifiStatus() {
+    const statusAlert = document.getElementById('wifiStatusAlert');
+    const statusContent = document.getElementById('wifiStatusContent');
+    if (!statusAlert || !statusContent) return;
+    
+    fetch('/api/wifi/status')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.connected) {
+                statusAlert.className = 'alert alert-success d-flex justify-content-between align-items-center mb-0';
+                statusContent.innerHTML = `
+                    <i class="fas fa-wifi me-2"></i>
+                    <strong>Connecté:</strong> ${data.ssid}
+                    <span class="ms-3 text-muted">${data.ip_address || ''}</span>
+                    <span class="badge bg-light text-dark ms-2">${data.signal || ''}%</span>
+                `;
+            } else {
+                statusAlert.className = 'alert alert-danger d-flex justify-content-between align-items-center mb-0';
+                statusContent.innerHTML = '<i class="fas fa-wifi-slash me-2"></i><strong>Non connecté</strong>';
+            }
+        })
+        .catch(err => {
+            statusAlert.className = 'alert alert-secondary d-flex justify-content-between align-items-center mb-0';
+            statusContent.innerHTML = '<i class="fas fa-question-circle me-2"></i><strong>Statut inconnu</strong>';
+            console.error('Erreur statut WiFi:', err);
+        });
+}
+
+// ============================================
+// GESTION DES PHOTOS
+// ============================================
+
 // Fonction pour supprimer une photo individuelle
 function deletePhoto(filename, type) {
     if (!confirm('Êtes-vous sûr de vouloir supprimer cette photo ?\n\n' + filename)) {
@@ -1251,6 +1919,10 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Ajouter des événements pour les changements de configuration d'imprimante
     setupPrinterConfigEvents();
+    
+    // Initialiser le WiFi
+    refreshWifiStatus();
+    loadSavedWifi();
 });
 
 // Fonction pour configurer les événements de configuration d'imprimante

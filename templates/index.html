@@ -333,6 +333,12 @@
          style="position: fixed; bottom: 0; left: 0; width: 60px; height: 60px; z-index: 50; cursor: default;"
          onclick="handleAdminTap()">
     </div>
+    
+    <!-- Bouton invisible en haut à gauche pour redémarrer la caméra (double-tap) -->
+    <div id="cameraRestartZone" 
+         style="position: fixed; top: 0; left: 0; width: 80px; height: 80px; z-index: 50; cursor: default;"
+         onclick="handleCameraRestartTap()">
+    </div>
 </div>
 
 <!-- Overlay écran de veille / diaporama -->
@@ -598,6 +604,62 @@ function handleAdminTap() {
         adminTapCount = 0;
         window.location.href = '/unlock';
     }
+}
+
+// Gestion du double-tap en haut à gauche pour redémarrer la caméra
+let cameraRestartTapCount = 0;
+let cameraRestartTapTimer = null;
+let cameraRestartCooldown = false;
+
+function handleCameraRestartTap() {
+    // Éviter les redémarrages trop fréquents
+    if (cameraRestartCooldown) return;
+    
+    cameraRestartTapCount++;
+    
+    if (cameraRestartTapTimer) clearTimeout(cameraRestartTapTimer);
+    
+    // Reset après 800ms sans tap
+    cameraRestartTapTimer = setTimeout(() => {
+        cameraRestartTapCount = 0;
+    }, 800);
+    
+    // Double-tap détecté -> redémarrer la caméra
+    if (cameraRestartTapCount >= 2) {
+        cameraRestartTapCount = 0;
+        restartCameraStream();
+    }
+}
+
+function restartCameraStream() {
+    const videoPreview = document.getElementById('videoPreview');
+    
+    // Cooldown de 5 secondes pour éviter le spam
+    cameraRestartCooldown = true;
+    setTimeout(() => { cameraRestartCooldown = false; }, 5000);
+    
+    // Indicateur visuel discret
+    videoPreview.style.opacity = '0.5';
+    
+    // Appeler l'API pour redémarrer la caméra
+    fetch('/api/restart_camera', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            // Attendre un court instant puis recharger le flux
+            setTimeout(() => {
+                // Forcer le rechargement de l'image en ajoutant un timestamp
+                const timestamp = new Date().getTime();
+                videoPreview.src = '/video_feed?' + timestamp;
+                videoPreview.style.opacity = '1';
+            }, 1500);
+        })
+        .catch(err => {
+            console.error('Erreur restart caméra:', err);
+            // Fallback: recharger juste le flux
+            const timestamp = new Date().getTime();
+            videoPreview.src = '/video_feed?' + timestamp;
+            videoPreview.style.opacity = '1';
+        });
 }
 
 // Charger l'overlay actuel
